@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/merlincox/reflective"
 	"os"
+
+	"github.com/merlincox/reflective"
 )
 
 type TestStruct struct {
