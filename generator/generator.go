@@ -885,17 +885,22 @@ func (g *generator) fillUint64(x ...Namable) uint64 {
 // FillRandomly fills a data structure pseudo-randomly. The argument must be a pointer to the structure.
 func (g *generator) FillRandomly(a any) error {
 
-	return g.FillRandomlyByValue(reflect.ValueOf(a))
+	value := reflect.ValueOf(a)
+	if value.Kind() != reflect.Pointer {
+		return fmt.Errorf("the argument to FillRandomly to must be a pointer")
+	}
+
+	g.fill(value.Elem())
+	return nil
 }
 
 // FillRandomlyByValue fills a data structure pseudo-randomly. The argument must be the reflect.Vaue of a pointer to the structure.
-func (g *generator) FillRandomlyByValue(val reflect.Value) error {
-	if val.Kind() != reflect.Pointer {
-		return fmt.Errorf("the argument to FillRandomlyByValue to must be a pointer")
+func (g *generator) FillRandomlyByValue(value reflect.Value) error {
+	if !value.CanSet() {
+		return fmt.Errorf("the argument to FillRandomlyByValue must be able to be set")
 	}
 
-	g.fill(val.Elem())
-
+	g.fill(value)
 	return nil
 }
 
@@ -908,7 +913,7 @@ func (g *generator) fill(value reflect.Value, visited ...Namable) {
 	pushed := pushNamed(visited, currentType)
 
 	switch value.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if g.useNilPointer(pushed...) {
 			return
 		}
