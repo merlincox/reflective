@@ -51,7 +51,7 @@ func main() {
 		generator.SliceLenRange(1, 5),
 		generator.MapLenRange(1, 5),
 		generator.Float32Fn(
-			func(visited ...generator.Named) (float32, bool) {
+			func(visited ...generator.Namable) (float32, bool) {
 				l := len(visited)
 				if l > 2 {
 					if visited[l-3].Name() == "AnotherTestStruct" && visited[l-2].Name() == "Fval2" {
@@ -64,7 +64,7 @@ func main() {
 
 	g = g.WithOption(
 		generator.IntFn(
-			func(visited ...generator.Named) (int, bool) {
+			func(visited ...generator.Namable) (int, bool) {
 				l := len(visited)
 				if l > 0 {
 					if visited[l-1].PkgPath() == "main" && visited[l-1].Name() == "SomeEnum" {
