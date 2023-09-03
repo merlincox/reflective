@@ -913,7 +913,7 @@ func (g *generator) fill(value reflect.Value, visited ...Namable) {
 	pushed := pushNamed(visited, currentType)
 
 	switch value.Kind() {
-	case reflect.Pointer:
+	case reflect.Ptr:
 		if g.useNilPointer(pushed...) {
 			return
 		}
