@@ -7,52 +7,80 @@ import (
 	"os"
 )
 
+type SomeEnum int
+
+const (
+	enum1 SomeEnum = iota
+	enum2
+	enum3
+)
+
+type FuncType func()
+
 type TestStruct struct {
-	Name     string             `json:"name"`
-	Names    []string           `json:"names"`
-	ID       int                `json:"id"`
-	SomeMap  map[int]string     `json:"some_map"`
-	Fixed    [4]string          `json:"fixed"`
-	Another  *AnotherTestStruct `json:"another"`
-	Another2 *AnotherTestStruct `json:"another2"`
-	Bool     bool               `json:"bool"`
+	Name        string             `json:"name"`
+	Names       []string           `json:"names"`
+	ID          int                `json:"id"`
+	SomeMap     map[int]string     `json:"some_map"`
+	Fixed       [4]string          `json:"fixed"`
+	Another     *AnotherTestStruct `json:"another"`
+	Another2    *AnotherTestStruct `json:"another2"`
+	Bool        bool               `json:"bool"`
+	Fval2       float32            `json:"fval2"`
+	Enumval     SomeEnum           `json:"enumval"`
+	SomeFunc    func()             `json:"-"`
+	AnotherFunc *FuncType          `json:"-"`
 }
 
 type AnotherTestStruct struct {
-	Name string  `json:"name"`
-	ID   int32   `json:"id"`
-	Fval float32 `json:"fval"`
+	Name  string  `json:"name"`
+	ID    int32   `json:"id"`
+	Fval  float32 `json:"fval"`
+	Fval2 float32 `json:"fval2"`
 }
 
 func main() {
 
 	tester := TestStruct{}
 
-	//if err := reflective.FillRandomly(&tester); err != nil {
-	//	fmt.Println(err)
-	//	os.Exit(1)
-	//}
-
-	//data, _ := json.MarshalIndent(tester, "", "  ")
-
-	//fmt.Println(string(data))
-
 	g := generator.New(
-		generator.WithPointerNilChance(1),
-		generator.WithBooleanFalseChance(1),
-		generator.WithRunes([]rune("abc ")),
-		generator.WithStringLenRange(0, 5),
-		generator.WithSliceLenRange(0, 5),
-		generator.WithMapLenRange(0, 5),
+		generator.PointerNilChance(0),
+		generator.BooleanFalseChance(1),
+		generator.Runes([]rune("abc ")),
+		generator.StringLenRange(1, 16),
+		generator.SliceLenRange(1, 5),
+		generator.MapLenRange(1, 5),
+		generator.Float32Fn(
+			func(visited ...generator.Named) (float32, bool) {
+				l := len(visited)
+				if l > 2 {
+					if visited[l-3].Name() == "AnotherTestStruct" && visited[l-2].Name() == "Fval2" {
+						return float32(0.7), true
+					}
+				}
+				return 0, false
+			}),
 	)
+
+	g = g.WithOption(
+		generator.IntFn(
+			func(visited ...generator.Named) (int, bool) {
+				l := len(visited)
+				if l > 0 {
+					if visited[l-1].PkgPath() == "main" && visited[l-1].Name() == "SomeEnum" {
+						return g.Intn(int(enum3) + 1), true
+					}
+				}
+				return 0, false
+			}))
 
 	if err := g.FillRandomly(&tester); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
+	fmt.Printf("%+v\n", tester)
 	data, _ := json.MarshalIndent(tester, "", "  ")
 
 	fmt.Println(string(data))
-
 }

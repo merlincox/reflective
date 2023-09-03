@@ -8,6 +8,8 @@ import (
 	"pgregory.net/rand"
 )
 
+type Indication string
+
 const (
 	defMinStrLen          = 0
 	defMaxStrLen          = 256
@@ -17,6 +19,11 @@ const (
 	defMaxMapLen          = 256
 	defPointerNilChance   = 0.5
 	defBooleanFalseChance = 0.5
+
+	MapKey    Indication = "MapKey"
+	MapValue  Indication = "MapValue"
+	Real      Indication = "Real"
+	Imaginary Indication = "Imaginary"
 )
 
 var defRunes = []rune("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -31,73 +38,122 @@ type Rand interface {
 	Float64() float64
 }
 
+type Named interface {
+	Name() string
+	PkgPath() string
+	Kind() reflect.Kind
+}
+
+type structField struct {
+	field reflect.StructField
+}
+
+func (w structField) Kind() reflect.Kind {
+	return reflect.Invalid
+}
+
+func (w structField) PkgPath() string {
+	return w.field.PkgPath
+}
+
+func (w structField) Name() string {
+	return w.field.Name
+}
+
+type indicator struct {
+	value Indication
+}
+
+func (w indicator) Kind() reflect.Kind {
+	return reflect.Invalid
+}
+
+func (w indicator) PkgPath() string {
+	return ""
+}
+
+func (w indicator) Name() string {
+	return string(w.value)
+}
+
+func newIndicator(value Indication) indicator {
+	return indicator{value: value}
+}
+
+func pushNamed(visited []Named, named Named) []Named {
+	pushed := make([]Named, len(visited)+1)
+	copy(pushed, visited)
+	pushed[len(visited)] = named
+	return pushed
+}
+
 type generator struct {
 	minInt *int
 	maxInt *int
-	intFn  func(x any) (int, bool)
+	intFn  func(x ...Named) (int, bool)
 
 	minInt8 *int8
 	maxInt8 *int8
-	int8Fn  func(x any) (int8, bool)
+	int8Fn  func(x ...Named) (int8, bool)
 
 	minInt16 *int16
 	maxInt16 *int16
-	int16Fn  func(x any) (int16, bool)
+	int16Fn  func(x ...Named) (int16, bool)
 
 	minInt32 *int32
 	maxInt32 *int32
-	int32Fn  func(x any) (int32, bool)
+	int32Fn  func(x ...Named) (int32, bool)
 
 	minInt64 *int64
 	maxInt64 *int64
-	int64Fn  func(x any) (int64, bool)
+	int64Fn  func(x ...Named) (int64, bool)
 
 	minUint *uint
 	maxUint *uint
-	uintFn  func(x any) (uint, bool)
+	uintFn  func(x ...Named) (uint, bool)
 
 	minUint8 *uint8
 	maxUint8 *uint8
-	uint8Fn  func(x any) (uint8, bool)
+	uint8Fn  func(x ...Named) (uint8, bool)
 
 	minUint16 *uint16
 	maxUint16 *uint16
-	uint16Fn  func(x any) (uint16, bool)
+	uint16Fn  func(x ...Named) (uint16, bool)
 
 	minUint32 *uint32
 	maxUint32 *uint32
-	uint32Fn  func(x any) (uint32, bool)
+	uint32Fn  func(x ...Named) (uint32, bool)
 
 	minUint64 *uint64
 	maxUint64 *uint64
-	uint64Fn  func(x any) (uint64, bool)
+	uint64Fn  func(x ...Named) (uint64, bool)
 
 	minFloat32 *float32
 	maxFloat32 *float32
-	float32Fn  func(x any) (float32, bool)
+	float32Fn  func(x ...Named) (float32, bool)
 
 	minFloat64 *float64
 	maxFloat64 *float64
-	float64Fn  func(x any) (float64, bool)
+	float64Fn  func(x ...Named) (float64, bool)
 
 	minStrLen *uint
 	maxStrLen *uint
 	runes     []rune
-	stringFn  func(x any) (string, bool)
+	stringFn  func(x ...Named) (string, bool)
 
 	booleanFalseChance *float64
-	BoolFn             func(x any) (bool, bool)
+	boolFn             func(x ...Named) (bool, bool)
 
 	pointerNilChance *float64
-	PointerNilFn     func(x any) (bool, bool)
+	pointerNilFn     func(x ...Named) (bool, bool)
 
 	minSliceLen *uint
 	maxSliceLen *uint
-	sliceLenFn  func(x any) (int, bool)
+	sliceLenFn  func(x ...Named) (int, bool)
 
 	minMapLen *uint
 	maxMapLen *uint
-	mapLenFn  func(x any) (int, bool)
+	mapLenFn  func(x ...Named) (int, bool)
 
 	rand Rand
 }
@@ -114,18 +170,19 @@ func New(options ...Option) *generator {
 	return g
 }
 
-func WithRand(rand Rand) Option {
+func (g *generator) WithOption(option Option) *generator {
+	g = option(g)
+	return g
+}
+
+func UseRand(rand Rand) Option {
 	return func(g *generator) *generator {
 		g.rand = rand
 		return g
 	}
 }
 
-//BoolFn   func(x any) (bool, bool)
-//
-//PointerNilFn func(x any) (bool, bool)
-
-func WithPointerNilChance(chance float64) Option {
+func PointerNilChance(chance float64) Option {
 	if chance < 0 || chance > 1 {
 		panic("chance must be in range 0 to 1")
 	}
@@ -135,7 +192,14 @@ func WithPointerNilChance(chance float64) Option {
 	}
 }
 
-func WithBooleanFalseChance(chance float64) Option {
+func PointerNilFn(fn func(x ...Named) (bool, bool)) Option {
+	return func(g *generator) *generator {
+		g.pointerNilFn = fn
+		return g
+	}
+}
+
+func BooleanFalseChance(chance float64) Option {
 	if chance < 0 || chance > 1 {
 		panic("chance must be in range 0 to 1")
 	}
@@ -145,7 +209,14 @@ func WithBooleanFalseChance(chance float64) Option {
 	}
 }
 
-func WithIntRange(min, max int) Option {
+func BoolFn(fn func(x ...Named) (bool, bool)) Option {
+	return func(g *generator) *generator {
+		g.boolFn = fn
+		return g
+	}
+}
+
+func IntRange(min, max int) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -156,14 +227,14 @@ func WithIntRange(min, max int) Option {
 	}
 }
 
-func WithIntFn(fn func(x any) (int, bool)) Option {
+func IntFn(fn func(x ...Named) (int, bool)) Option {
 	return func(g *generator) *generator {
 		g.intFn = fn
 		return g
 	}
 }
 
-func WithInt8Range(min, max int8) Option {
+func Int8Range(min, max int8) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -174,14 +245,14 @@ func WithInt8Range(min, max int8) Option {
 	}
 }
 
-func WithInt8Fn(fn func(x any) (int8, bool)) Option {
+func Int8Fn(fn func(x ...Named) (int8, bool)) Option {
 	return func(g *generator) *generator {
 		g.int8Fn = fn
 		return g
 	}
 }
 
-func WithInt16Range(min, max int16) Option {
+func Int16Range(min, max int16) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -192,14 +263,14 @@ func WithInt16Range(min, max int16) Option {
 	}
 }
 
-func WithInt16Fn(fn func(x any) (int16, bool)) Option {
+func Int16Fn(fn func(x ...Named) (int16, bool)) Option {
 	return func(g *generator) *generator {
 		g.int16Fn = fn
 		return g
 	}
 }
 
-func WithInt32Range(min, max int32) Option {
+func Int32Range(min, max int32) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -210,14 +281,14 @@ func WithInt32Range(min, max int32) Option {
 	}
 }
 
-func WithInt32Fn(fn func(x any) (int32, bool)) Option {
+func Int32Fn(fn func(x ...Named) (int32, bool)) Option {
 	return func(g *generator) *generator {
 		g.int32Fn = fn
 		return g
 	}
 }
 
-func WithInt64Range(min, max int64) Option {
+func Int64Range(min, max int64) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -228,14 +299,14 @@ func WithInt64Range(min, max int64) Option {
 	}
 }
 
-func WithInt64Fn(fn func(x any) (int64, bool)) Option {
+func Int64Fn(fn func(x ...Named) (int64, bool)) Option {
 	return func(g *generator) *generator {
 		g.int64Fn = fn
 		return g
 	}
 }
 
-func WithUintRange(min, max uint) Option {
+func UintRange(min, max uint) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -246,14 +317,14 @@ func WithUintRange(min, max uint) Option {
 	}
 }
 
-func WithUintFn(fn func(x any) (uint, bool)) Option {
+func UintFn(fn func(x ...Named) (uint, bool)) Option {
 	return func(g *generator) *generator {
 		g.uintFn = fn
 		return g
 	}
 }
 
-func WithUint8Range(min, max uint8) Option {
+func Uint8Range(min, max uint8) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -264,14 +335,14 @@ func WithUint8Range(min, max uint8) Option {
 	}
 }
 
-func WithUint8Fn(fn func(x any) (uint8, bool)) Option {
+func Uint8Fn(fn func(x ...Named) (uint8, bool)) Option {
 	return func(g *generator) *generator {
 		g.uint8Fn = fn
 		return g
 	}
 }
 
-func WithUint16Range(min, max uint16) Option {
+func Uint16Range(min, max uint16) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -282,14 +353,14 @@ func WithUint16Range(min, max uint16) Option {
 	}
 }
 
-func WithUint16Fn(fn func(x any) (uint16, bool)) Option {
+func Uint16Fn(fn func(x ...Named) (uint16, bool)) Option {
 	return func(g *generator) *generator {
 		g.uint16Fn = fn
 		return g
 	}
 }
 
-func WithUint32Range(min, max uint32) Option {
+func Uint32Range(min, max uint32) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -300,14 +371,14 @@ func WithUint32Range(min, max uint32) Option {
 	}
 }
 
-func WithUint32Fn(fn func(x any) (uint32, bool)) Option {
+func Uint32Fn(fn func(x ...Named) (uint32, bool)) Option {
 	return func(g *generator) *generator {
 		g.uint32Fn = fn
 		return g
 	}
 }
 
-func WithUint64Range(min, max uint64) Option {
+func Uint64Range(min, max uint64) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -318,14 +389,14 @@ func WithUint64Range(min, max uint64) Option {
 	}
 }
 
-func WithUint64Fn(fn func(x any) (uint64, bool)) Option {
+func Uint64Fn(fn func(x ...Named) (uint64, bool)) Option {
 	return func(g *generator) *generator {
 		g.uint64Fn = fn
 		return g
 	}
 }
 
-func WithFloat32Range(min, max float32) Option {
+func Float32Range(min, max float32) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -336,14 +407,14 @@ func WithFloat32Range(min, max float32) Option {
 	}
 }
 
-func WithFloat32Fn(fn func(x any) (float32, bool)) Option {
+func Float32Fn(fn func(x ...Named) (float32, bool)) Option {
 	return func(g *generator) *generator {
 		g.float32Fn = fn
 		return g
 	}
 }
 
-func WithFloat64Range(min, max float64) Option {
+func Float64Range(min, max float64) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -354,14 +425,14 @@ func WithFloat64Range(min, max float64) Option {
 	}
 }
 
-func WithFloat64Fn(fn func(x any) (float64, bool)) Option {
+func Float64Fn(fn func(x ...Named) (float64, bool)) Option {
 	return func(g *generator) *generator {
 		g.float64Fn = fn
 		return g
 	}
 }
 
-func WithStringLenRange(min, max uint) Option {
+func StringLenRange(min, max uint) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -372,21 +443,21 @@ func WithStringLenRange(min, max uint) Option {
 	}
 }
 
-func WithStringFn(fn func(x any) (string, bool)) Option {
+func StringFn(fn func(x ...Named) (string, bool)) Option {
 	return func(g *generator) *generator {
 		g.stringFn = fn
 		return g
 	}
 }
 
-func WithRunes(runes []rune) Option {
+func Runes(runes []rune) Option {
 	return func(g *generator) *generator {
 		g.runes = runes
 		return g
 	}
 }
 
-func WithSliceLenRange(min, max uint) Option {
+func SliceLenRange(min, max uint) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -397,14 +468,14 @@ func WithSliceLenRange(min, max uint) Option {
 	}
 }
 
-func WithSliceLenFn(fn func(x any) (int, bool)) Option {
+func SliceLenFn(fn func(x ...Named) (int, bool)) Option {
 	return func(g *generator) *generator {
 		g.sliceLenFn = fn
 		return g
 	}
 }
 
-func WithMapLenRange(min, max uint) Option {
+func MapLenRange(min, max uint) Option {
 	if min > max {
 		panic("min may not exceed max")
 	}
@@ -415,65 +486,65 @@ func WithMapLenRange(min, max uint) Option {
 	}
 }
 
-func WithMapLenFn(fn func(x any) (int, bool)) Option {
+func MapLenFn(fn func(x ...Named) (int, bool)) Option {
 	return func(g *generator) *generator {
 		g.mapLenFn = fn
 		return g
 	}
 }
 
-func (g *generator) randIntn(i int) int {
+func (g *generator) Intn(i int) int {
 	if g.rand != nil {
 		return g.rand.Intn(i)
 	}
 	return rand.Intn(i)
 }
 
-func (g *generator) randInt31() int32 {
+func (g *generator) Int31() int32 {
 	if g.rand != nil {
 		return g.rand.Int31()
 	}
 	return rand.Int31()
 }
 
-func (g *generator) randInt31n(i int32) int32 {
+func (g *generator) Int31n(i int32) int32 {
 	if g.rand != nil {
 		return g.rand.Int31n(i)
 	}
 	return rand.Int31n(i)
 }
 
-func (g *generator) randUint64() uint64 {
+func (g *generator) Uint64() uint64 {
 	if g.rand != nil {
 		return g.rand.Uint64()
 	}
 	return rand.Uint64()
 }
 
-func (g *generator) randUint64n(u uint64) uint64 {
+func (g *generator) Uint64n(u uint64) uint64 {
 	if g.rand != nil {
 		return g.rand.Uint64n(u)
 	}
 	return rand.Uint64n(u)
 }
 
-func (g *generator) randFloat32() float32 {
+func (g *generator) Float32() float32 {
 	if g.rand != nil {
 		return g.rand.Float32()
 	}
 	return rand.Float32()
 }
 
-func (g *generator) randFloat64() float64 {
+func (g *generator) Float64() float64 {
 	if g.rand != nil {
 		return g.rand.Float64()
 	}
 	return rand.Float64()
 }
 
-func (g *generator) PointerNil(x any) bool {
-	if g.PointerNilFn != nil {
-		if out, ok := g.PointerNilFn(x); ok {
+func (g *generator) useNilPointer(x ...Named) bool {
+	if g.pointerNilFn != nil {
+		if out, ok := g.pointerNilFn(x...); ok {
 			return out
 		}
 	}
@@ -481,12 +552,12 @@ func (g *generator) PointerNil(x any) bool {
 	if g.pointerNilChance != nil {
 		chance = *g.pointerNilChance
 	}
-	return g.randFloat64() < chance
+	return g.Float64() < chance
 }
 
-func (g *generator) Float32(x any) float32 {
+func (g *generator) fillFloat32(x ...Named) float32 {
 	if g.float32Fn != nil {
-		if out, ok := g.float32Fn(x); ok {
+		if out, ok := g.float32Fn(x...); ok {
 			return out
 		}
 	}
@@ -500,12 +571,12 @@ func (g *generator) Float32(x any) float32 {
 	}
 	var divisor float32 = 2.0
 
-	return ((g.randFloat32() * ((max / divisor) - (min / divisor))) + (min / divisor)) * divisor
+	return ((g.Float32() * ((max / divisor) - (min / divisor))) + (min / divisor)) * divisor
 }
 
-func (g *generator) Float64(x any) float64 {
+func (g *generator) fillFloat64(x ...Named) float64 {
 	if g.float64Fn != nil {
-		if out, ok := g.float64Fn(x); ok {
+		if out, ok := g.float64Fn(x...); ok {
 			return out
 		}
 	}
@@ -519,12 +590,25 @@ func (g *generator) Float64(x any) float64 {
 	}
 	divisor := 2.0
 
-	return ((g.randFloat64() * ((max / divisor) - (min / divisor))) + (min / divisor)) * divisor
+	return ((g.Float64() * ((max / divisor) - (min / divisor))) + (min / divisor)) * divisor
 }
 
-func (g *generator) String(x any) string {
+func (g *generator) fillBool(x ...Named) bool {
+	if g.boolFn != nil {
+		if out, ok := g.boolFn(x...); ok {
+			return out
+		}
+	}
+	chance := defBooleanFalseChance
+	if g.booleanFalseChance != nil {
+		chance = *g.booleanFalseChance
+	}
+	return g.Float64() >= chance
+}
+
+func (g *generator) fillString(x ...Named) string {
 	if g.stringFn != nil {
-		if out, ok := g.stringFn(x); ok {
+		if out, ok := g.stringFn(x...); ok {
 			return out
 		}
 	}
@@ -539,21 +623,21 @@ func (g *generator) String(x any) string {
 	if g.minStrLen != nil {
 		min = int(*g.minStrLen)
 	}
-	strLen := g.randIntn(max-min) + min
+	strLen := g.Intn(max-min) + min
 	runes := make([]rune, strLen)
 	for i := range runes {
 		if len(g.runes) != 0 {
-			runes[i] = g.runes[g.randIntn(len(g.runes))]
+			runes[i] = g.runes[g.Intn(len(g.runes))]
 		} else {
-			runes[i] = defRunes[g.randIntn(len(defRunes))]
+			runes[i] = defRunes[g.Intn(len(defRunes))]
 		}
 	}
 	return string(runes)
 }
 
-func (g *generator) SliceLen(x any) int {
+func (g *generator) getSliceLen(x ...Named) int {
 	if g.sliceLenFn != nil {
-		if out, ok := g.sliceLenFn(x); ok {
+		if out, ok := g.sliceLenFn(x...); ok {
 			return out
 		}
 	}
@@ -568,12 +652,12 @@ func (g *generator) SliceLen(x any) int {
 	if g.minSliceLen != nil {
 		min = int(*g.minSliceLen)
 	}
-	return g.randIntn(max-min) + min
+	return g.Intn(max-min) + min
 }
 
-func (g *generator) MapLen(x any) int {
+func (g *generator) getMapLen(x ...Named) int {
 	if g.mapLenFn != nil {
-		if out, ok := g.mapLenFn(x); ok {
+		if out, ok := g.mapLenFn(x...); ok {
 			return out
 		}
 	}
@@ -588,12 +672,12 @@ func (g *generator) MapLen(x any) int {
 	if g.minMapLen != nil {
 		min = int(*g.minMapLen)
 	}
-	return g.randIntn(max-min) + min
+	return g.Intn(max-min) + min
 }
 
-func (g *generator) Int(x any) int {
+func (g *generator) fillInt(x ...Named) int {
 	if g.intFn != nil {
-		if out, ok := g.intFn(x); ok {
+		if out, ok := g.intFn(x...); ok {
 			return out
 		}
 	}
@@ -605,12 +689,12 @@ func (g *generator) Int(x any) int {
 	if g.maxInt != nil {
 		max = int64(*g.maxInt)
 	}
-	return int(g.genInt64(min, max))
+	return int(g.rangeInt64(min, max))
 }
 
-func (g *generator) Int8(x any) int8 {
+func (g *generator) fillInt8(x ...Named) int8 {
 	if g.int8Fn != nil {
-		if out, ok := g.int8Fn(x); ok {
+		if out, ok := g.int8Fn(x...); ok {
 			return out
 		}
 	}
@@ -622,12 +706,12 @@ func (g *generator) Int8(x any) int8 {
 	if g.maxInt8 != nil {
 		max = int64(*g.maxInt8)
 	}
-	return int8(g.genInt64(min, max))
+	return int8(g.rangeInt64(min, max))
 }
 
-func (g *generator) Int16(x any) int16 {
+func (g *generator) fillInt16(x ...Named) int16 {
 	if g.int16Fn != nil {
-		if out, ok := g.int16Fn(x); ok {
+		if out, ok := g.int16Fn(x...); ok {
 			return out
 		}
 	}
@@ -639,12 +723,12 @@ func (g *generator) Int16(x any) int16 {
 	if g.maxInt16 != nil {
 		max = int64(*g.maxInt16)
 	}
-	return int16(g.genInt64(min, max))
+	return int16(g.rangeInt64(min, max))
 }
 
-func (g *generator) Int32(x any) int32 {
+func (g *generator) fillInt32(x ...Named) int32 {
 	if g.int32Fn != nil {
-		if out, ok := g.int32Fn(x); ok {
+		if out, ok := g.int32Fn(x...); ok {
 			return out
 		}
 	}
@@ -656,12 +740,12 @@ func (g *generator) Int32(x any) int32 {
 	if g.maxInt32 != nil {
 		max = int64(*g.maxInt32)
 	}
-	return int32(g.genInt64(min, max))
+	return int32(g.rangeInt64(min, max))
 }
 
-func (g *generator) Int64(x any) int64 {
+func (g *generator) fillInt64(x ...Named) int64 {
 	if g.int64Fn != nil {
-		if out, ok := g.int64Fn(x); ok {
+		if out, ok := g.int64Fn(x...); ok {
 			return out
 		}
 	}
@@ -673,24 +757,32 @@ func (g *generator) Int64(x any) int64 {
 	if g.maxInt64 != nil {
 		max = *g.maxInt64
 	}
-	return g.genInt64(min, max)
+	return g.rangeInt64(min, max)
 }
 
-func (g *generator) genInt64(min, max int64) int64 {
-	umin, umax := mapIToU(min), mapIToU(max)
-	return mapUToI(g.genUint64(umin, umax))
+func (g *generator) rangeInt64(min, max int64) int64 {
+	umin, umax := mapI64ToU64(min), mapI64ToU64(max)
+	return mapU64ToI64(g.rangeUint64(umin, umax))
 }
 
-func (g *generator) genUint64(min, max uint64) uint64 {
+func (g *generator) rangeUint64(min, max uint64) uint64 {
 	if min == 0 && max == math.MaxUint64 {
-		return g.randUint64()
+		return g.Uint64()
 	}
-	return g.randUint64n(max-min) + min
+	return g.Uint64n(max-min) + min
 }
 
-func (g *generator) Uint(x any) uint {
+func mapU64ToI64(n uint64) int64 {
+	return int64(n - 1<<63)
+}
+
+func mapI64ToU64(n int64) uint64 {
+	return uint64(n) + 1<<63
+}
+
+func (g *generator) fillUint(x ...Named) uint {
 	if g.uintFn != nil {
-		if out, ok := g.uintFn(x); ok {
+		if out, ok := g.uintFn(x...); ok {
 			return out
 		}
 	}
@@ -705,12 +797,12 @@ func (g *generator) Uint(x any) uint {
 	if g.minUint != nil {
 		min = uint64(*g.minUint)
 	}
-	return uint(g.genUint64(min, max))
+	return uint(g.rangeUint64(min, max))
 }
 
-func (g *generator) Uint8(x any) uint8 {
+func (g *generator) fillUint8(x ...Named) uint8 {
 	if g.uint8Fn != nil {
-		if out, ok := g.uint8Fn(x); ok {
+		if out, ok := g.uint8Fn(x...); ok {
 			return out
 		}
 	}
@@ -725,12 +817,12 @@ func (g *generator) Uint8(x any) uint8 {
 	if g.minUint8 != nil {
 		min = uint64(*g.minUint8)
 	}
-	return uint8(g.genUint64(min, max))
+	return uint8(g.rangeUint64(min, max))
 }
 
-func (g *generator) Uint16(x any) uint16 {
+func (g *generator) fillUint16(x ...Named) uint16 {
 	if g.uint16Fn != nil {
-		if out, ok := g.uint16Fn(x); ok {
+		if out, ok := g.uint16Fn(x...); ok {
 			return out
 		}
 	}
@@ -745,12 +837,12 @@ func (g *generator) Uint16(x any) uint16 {
 	if g.minUint16 != nil {
 		min = uint64(*g.minUint16)
 	}
-	return uint16(g.genUint64(min, max))
+	return uint16(g.rangeUint64(min, max))
 }
 
-func (g *generator) Uint32(x any) uint32 {
+func (g *generator) fillUint32(x ...Named) uint32 {
 	if g.uint32Fn != nil {
-		if out, ok := g.uint32Fn(x); ok {
+		if out, ok := g.uint32Fn(x...); ok {
 			return out
 		}
 	}
@@ -765,12 +857,12 @@ func (g *generator) Uint32(x any) uint32 {
 	if g.minUint32 != nil {
 		min = uint64(*g.minUint32)
 	}
-	return uint32(g.genUint64(min, max))
+	return uint32(g.rangeUint64(min, max))
 }
 
-func (g *generator) Uint64(x any) uint64 {
+func (g *generator) fillUint64(x ...Named) uint64 {
 	if g.uint64Fn != nil {
-		if out, ok := g.uint64Fn(x); ok {
+		if out, ok := g.uint64Fn(x...); ok {
 			return out
 		}
 	}
@@ -782,7 +874,7 @@ func (g *generator) Uint64(x any) uint64 {
 	if g.maxUint64 != nil {
 		min = *g.maxUint64
 	}
-	return g.genUint64(min, max)
+	return g.rangeUint64(min, max)
 }
 
 func (g *generator) FillRandomly(a any) error {
@@ -791,149 +883,150 @@ func (g *generator) FillRandomly(a any) error {
 		return fmt.Errorf("the argument to FillRandomly to must be a pointer")
 	}
 
-	return g.fillRandomly(val.Elem())
-}
+	g.fill(val.Elem())
 
-func (g *generator) fillRandomly(receiver reflect.Value) error {
-	if !receiver.CanSet() {
-		return nil
-	}
-
-	switch receiver.Kind() {
-	case reflect.Ptr:
-		if g.PointerNil(receiver) {
-			return nil
-		}
-		receiver.Set(reflect.New(receiver.Type().Elem()))
-		return g.fillRandomly(receiver.Elem())
-
-	case reflect.Bool:
-		randBool := g.Bool(receiver)
-		receiver.SetBool(randBool)
-
-	case reflect.Int:
-		randInt := int64(g.Int(receiver))
-		receiver.SetInt(randInt)
-
-	case reflect.Int8:
-		randInt := int64(g.Int8(receiver))
-		receiver.SetInt(randInt)
-
-	case reflect.Int16:
-		randInt := int64(g.Int16(receiver))
-		receiver.SetInt(randInt)
-
-	case reflect.Int32:
-		randInt := int64(g.Int32(receiver))
-		receiver.SetInt(randInt)
-
-	case reflect.Int64:
-		randInt := int64(g.Int64(receiver))
-		receiver.SetInt(randInt)
-
-	case reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		randUint := uint64(rand.Uint32())
-		receiver.SetUint(randUint)
-
-	case reflect.Float32, reflect.Float64:
-		randFloat := float64(rand.Float32())
-		receiver.SetFloat(randFloat)
-
-	case reflect.String:
-		randStringVal := g.String(receiver)
-		receiver.SetString(randStringVal)
-
-	case reflect.Slice:
-		elementType := receiver.Type().Elem()
-		size := g.SliceLen(receiver)
-		sliceVal := reflect.MakeSlice(reflect.SliceOf(elementType), 0, size)
-		for i := 0; i < size; i++ {
-			newElement := reflect.Indirect(reflect.New(elementType))
-			if err := g.fillRandomly(newElement); err != nil {
-				return err
-			}
-			sliceVal = reflect.Append(sliceVal, newElement)
-		}
-		receiver.Set(sliceVal)
-
-	case reflect.Array:
-		for i := 0; i < receiver.Len(); i++ {
-			if err := g.fillRandomly(receiver.Index(i)); err != nil {
-				return err
-			}
-		}
-
-	case reflect.Map:
-		mapType := receiver.Type()
-		mapVal := reflect.MakeMap(mapType)
-		size := g.MapLen(receiver)
-		for i := 0; i < size; i++ {
-			newElement := reflect.Indirect(reflect.New(mapType.Elem()))
-			if err := g.fillRandomly(newElement); err != nil {
-				return err
-			}
-			newKey := reflect.Indirect(reflect.New(mapType.Key()))
-			if err := g.fillRandomly(newKey); err != nil {
-				return err
-			}
-			mapVal.SetMapIndex(newKey, newElement)
-		}
-		receiver.Set(mapVal)
-
-	case reflect.Struct:
-		for i := 0; i < receiver.NumField(); i++ {
-			if err := g.fillRandomly(receiver.Field(i)); err != nil {
-				return err
-			}
-		}
-	default:
-		return fmt.Errorf("unsupported kind: %s", receiver.Kind().String())
-	}
 	return nil
 }
 
-func (g *generator) Bool(x any) bool {
-	if g.BoolFn != nil {
-		if out, ok := g.BoolFn(x); ok {
-			return out
+func (g *generator) fill(value reflect.Value, visited ...Named) {
+	if !value.CanSet() {
+		return
+	}
+
+	currentType := value.Type()
+	pushed := pushNamed(visited, currentType)
+
+	switch value.Kind() {
+	case reflect.Ptr:
+		if g.useNilPointer(pushed...) {
+			return
+		}
+		pointerType := value.Type().Elem()
+		switch pointerType.Kind() {
+		case reflect.Chan,
+			reflect.Func,
+			reflect.Interface,
+			reflect.Uintptr,
+			reflect.UnsafePointer,
+			reflect.Invalid:
+			return
+		}
+		value.Set(reflect.New(pointerType))
+		g.fill(value.Elem(), pushed...)
+
+	case reflect.Bool:
+		randBool := g.fillBool(pushed...)
+		value.SetBool(randBool)
+
+	case reflect.Int:
+		randInt := int64(g.fillInt(pushed...))
+		value.SetInt(randInt)
+
+	case reflect.Int8:
+		randInt := int64(g.fillInt8(pushed...))
+		value.SetInt(randInt)
+
+	case reflect.Int16:
+		randInt := int64(g.fillInt16(pushed...))
+		value.SetInt(randInt)
+
+	case reflect.Int32:
+		randInt := int64(g.fillInt32(pushed...))
+		value.SetInt(randInt)
+
+	case reflect.Int64:
+		randInt := g.fillInt64(pushed...)
+		value.SetInt(randInt)
+
+	case reflect.Uint:
+		randUint := uint64(g.fillUint(pushed...))
+		value.SetUint(randUint)
+
+	case reflect.Uint8:
+		randUint := uint64(g.fillUint8(pushed...))
+		value.SetUint(randUint)
+
+	case reflect.Uint16:
+		randUint := uint64(g.fillUint16(pushed...))
+		value.SetUint(randUint)
+
+	case reflect.Uint32:
+		randUint := uint64(g.fillUint32(pushed...))
+		value.SetUint(randUint)
+
+	case reflect.Uint64:
+		randUint := g.fillUint64(pushed...)
+		value.SetUint(randUint)
+
+	case reflect.Float32:
+		randFloat := float64(g.fillFloat32(pushed...))
+		value.SetFloat(randFloat)
+
+	case reflect.Float64:
+		randFloat := g.fillFloat64(pushed...)
+		value.SetFloat(randFloat)
+
+	case reflect.Complex64:
+		realIndicator := newIndicator(Real)
+		repushed := pushNamed(pushed, realIndicator)
+		r := float32(g.fillFloat32(repushed...))
+		imagIndicator := newIndicator(Imaginary)
+		repushed = pushNamed(pushed, imagIndicator)
+		i := float32(g.fillFloat32(repushed...))
+		value.SetComplex(complex128(complex(r, i)))
+
+	case reflect.Complex128:
+		realIndicator := newIndicator(Real)
+		repushed := pushNamed(pushed, realIndicator)
+		r := float64(g.fillFloat32(repushed...))
+		imagIndicator := newIndicator(Imaginary)
+		repushed = pushNamed(pushed, imagIndicator)
+		i := float64(g.fillFloat32(repushed...))
+		value.SetComplex(complex(r, i))
+
+	case reflect.String:
+		randStringVal := g.fillString(pushed...)
+		value.SetString(randStringVal)
+
+	case reflect.Slice:
+		elementType := currentType.Elem()
+		size := g.getSliceLen(pushed...)
+		sliceVal := reflect.MakeSlice(reflect.SliceOf(elementType), 0, size)
+		for i := 0; i < size; i++ {
+			newElement := reflect.Indirect(reflect.New(elementType))
+			g.fill(newElement, pushed...)
+			sliceVal = reflect.Append(sliceVal, newElement)
+		}
+		value.Set(sliceVal)
+
+	case reflect.Array:
+		for i := 0; i < value.Len(); i++ {
+			g.fill(value.Index(i), pushed...)
+		}
+
+	case reflect.Map:
+		mapVal := reflect.MakeMap(currentType)
+		size := g.getMapLen(pushed...)
+		for i := 0; i < size; i++ {
+			newElement := reflect.Indirect(reflect.New(currentType.Elem()))
+			valIndicator := newIndicator(MapValue)
+			repushed := pushNamed(pushed, valIndicator)
+			g.fill(newElement, repushed...)
+			newKey := reflect.Indirect(reflect.New(currentType.Key()))
+			keyIndicator := newIndicator(MapKey)
+			repushed = pushNamed(pushed, keyIndicator)
+			g.fill(newKey, repushed...)
+			mapVal.SetMapIndex(newKey, newElement)
+		}
+		value.Set(mapVal)
+
+	case reflect.Struct:
+		for i := 0; i < value.NumField(); i++ {
+
+			fieldType := structField{field: currentType.Field(i)}
+			repushed := pushNamed(pushed, fieldType)
+
+			g.fill(value.Field(i), repushed...)
 		}
 	}
-	chance := defBooleanFalseChance
-	if g.booleanFalseChance != nil {
-		chance = *g.booleanFalseChance
-	}
-	return g.randFloat64() >= chance
-
-}
-
-type Generator interface {
-	Bool(x any) bool
-	Int(x any) int
-	Int8(x any) int8
-	Int16(x any) int16
-	Int32(x any) int32
-	Int64(x any) int64
-	Uint(x any) uint
-	Uint8(x any) uint8
-	Uint16(x any) uint16
-	Uint32(x any) uint32
-	Uint64(x any) uint64
-	Float32(x any) float32
-	Float64(x any) float64
-	String(x any) string
-	SliceLen(x any) int
-	MapLen(x any) int
-	PointerNotNil(x any) float64
-	FillRandomly(a any) error
-}
-
-func mapUToI(n uint64) int64 {
-	return int64(n - 1<<63)
-}
-
-func mapIToU(n int64) uint64 {
-	if n >= 0 {
-		return uint64(n) + 1<<63
-	}
-	return uint64(n + math.MaxInt64 + 1)
 }
