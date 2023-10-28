@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/merlincox/reflective/generator"
 	"os"
+
+	"github.com/merlincox/reflective/generator"
 )
 
 type SomeEnum int
@@ -24,6 +25,8 @@ type TestStruct struct {
 	Unknown2     any
 	Unknown3     any
 	AnonStruct
+	RuneVal   rune
+	ByteSlice []byte
 }
 
 type SubStruct struct {
@@ -32,14 +35,14 @@ type SubStruct struct {
 }
 
 type AnonStruct struct {
-	Field1 int
-	Field2 int
+	Field3 int
+	Field4 int
 }
 
 func main() {
 	tester := TestStruct{}
 
-	g := generator.New(
+	g, _ := generator.New(
 		generator.IntFn(
 			func(m *generator.Matcher) (int, int, bool) {
 				if m.MatchesAFieldOf(SubStruct{}, "Field1") {
@@ -48,7 +51,7 @@ func main() {
 				return 0, 0, false
 			}),
 	)
-	g = g.WithOptions(
+	g, _ = g.WithOptions(
 
 		generator.IntFn(
 			func(m *generator.Matcher) (int, int, bool) {
@@ -73,7 +76,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	data, _ := json.MarshalIndent(tester, "", "  ")
-
+	data, err := json.MarshalIndent(tester, "", "  ")
+	if err != nil {
+		fmt.Printf("=====\n%s\n", err.Error())
+		os.Exit(1)
+	}
+	if len(data) == 0 {
+		fmt.Println("empty")
+	}
 	fmt.Println(string(data))
 }

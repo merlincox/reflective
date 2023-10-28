@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -19,7 +20,24 @@ const (
 	defMaxFloat           = float64(math.MaxInt8)
 )
 
-var defRunes = []rune("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+var (
+	defRunes = []rune("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+	boolType    = reflect.TypeOf(true)
+	intType     = reflect.TypeOf(0)
+	int8Type    = reflect.TypeOf(int8(0))
+	int16Type   = reflect.TypeOf(int16(0))
+	int32Type   = reflect.TypeOf(int32(0))
+	int64Type   = reflect.TypeOf(int64(0))
+	uintType    = reflect.TypeOf(uint(0))
+	uint8Type   = reflect.TypeOf(uint8(0))
+	uint16Type  = reflect.TypeOf(uint16(0))
+	uint32Type  = reflect.TypeOf(uint32(0))
+	uint64Type  = reflect.TypeOf(uint64(0))
+	float32Type = reflect.TypeOf(float32(0))
+	float64Type = reflect.TypeOf(float64(0))
+	stringType  = reflect.TypeOf("")
+)
 
 type numeric interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64
@@ -28,6 +46,7 @@ type numeric interface {
 type generator struct {
 	rand PseudoRandom
 
+	maxDepth           int
 	runes              []rune
 	stringFn           []func(t *Matcher) (string, bool)
 	booleanFalseChance *float64
@@ -35,50 +54,52 @@ type generator struct {
 	pointerNilChance   *float64
 	pointerNilFn       []func(t *Matcher) (bool, bool)
 
-	stringLenSet gen[int]
-	mapLenSet    gen[int]
-	sliceLenSet  gen[int]
-	float32Set   gen[float32]
-	float64Set   gen[float64]
-	intSet       gen[int]
-	int8Set      gen[int8]
-	int16Set     gen[int16]
-	int32Set     gen[int32]
-	int64Set     gen[int64]
-	uintSet      gen[uint]
-	uint8Set     gen[uint8]
-	uint16Set    gen[uint16]
-	uint32Set    gen[uint32]
-	uint64Set    gen[uint64]
+	stringLenSet nset[int]
+	mapLenSet    nset[int]
+	sliceLenSet  nset[int]
+	float32Set   nset[float32]
+	float64Set   nset[float64]
+	intSet       nset[int]
+	int8Set      nset[int8]
+	int16Set     nset[int16]
+	int32Set     nset[int32]
+	int64Set     nset[int64]
+	uintSet      nset[uint]
+	uint8Set     nset[uint8]
+	uint16Set    nset[uint16]
+	uint32Set    nset[uint32]
+	uint64Set    nset[uint64]
 }
 
-type gen[T numeric] struct {
+type nset[T numeric] struct {
 	min *T
 	max *T
 	fn  []func(t *Matcher) (T, T, bool)
 }
 
 // Option defines an option for customising the generator
-type Option func(*generator) *generator
+type Option func(*generator) (*generator, error)
 
 // New creates a new generator with zero or more Options
-func New(options ...Option) *generator {
-	g := &generator{}
-
-	for _, o := range options {
-		g = o(g)
+func New(options ...Option) (*generator, error) {
+	g := &generator{
+		maxDepth: 3,
 	}
 
-	return g
+	return g.WithOptions(options...)
 }
 
-// WithOptions adds an option to a generator. This may be useful if you wish to use generator methods in a custom function.
-func (g *generator) WithOptions(options ...Option) *generator {
+// WithOptions adds options to a generator. This may be useful if you wish to use generator methods in a custom function.
+func (g *generator) WithOptions(options ...Option) (*generator, error) {
+	var err error
 	for _, o := range options {
-		g = o(g)
+		g, err = o(g)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return g
+	return g, nil
 }
 
 func (g *generator) genBool(t *Matcher) bool {
@@ -132,16 +153,19 @@ func (g *generator) genString(t *Matcher) string {
 	if max == 0 {
 		return ""
 	}
-	strLen := g.Intn(max-min) + min
-	runes := make([]rune, strLen)
-	for i := range runes {
-		if len(g.runes) != 0 {
-			runes[i] = g.runes[g.Intn(len(g.runes))]
-		} else {
-			runes[i] = defRunes[g.Intn(len(defRunes))]
-		}
+	source := defRunes
+	if len(g.runes) != 0 {
+		source = g.runes
 	}
-	return string(runes)
+	return g.fillString(g.Intn(max-min)+min, source)
+}
+
+func (g *generator) fillString(size int, source []rune) string {
+	name := make([]rune, size)
+	for j := 0; j < size; j++ {
+		name[j] = source[g.Intn(len(source))]
+	}
+	return string(name)
 }
 
 func (g *generator) genFloat32(t *Matcher) float32 {
@@ -492,7 +516,7 @@ func (g *generator) FillRandomly(a any) error {
 // FillRandomlyByValue fills a data structure pseudo-randomly. The argument must be the reflect.Value of the structure.
 func (g *generator) FillRandomlyByValue(value reflect.Value) error {
 	if !value.CanSet() {
-		return fmt.Errorf("the argument to FillRandomlyByValue must be able to be set")
+		return fmt.Errorf("the argument to FillRandomlyByValue must be able to be nset")
 	}
 
 	g.fill(value, nil)
@@ -514,7 +538,6 @@ func (g *generator) fill(value reflect.Value, matcher *Matcher) {
 		switch pointerType.Kind() {
 		case reflect.Chan,
 			reflect.Func,
-			reflect.Interface,
 			reflect.Uintptr,
 			reflect.UnsafePointer,
 			reflect.Invalid:
@@ -632,7 +655,7 @@ func (g *generator) fill(value reflect.Value, matcher *Matcher) {
 }
 
 func (g *generator) genAnyValue(t *Matcher) (val reflect.Value, ok bool) {
-	kind, kindType := g.getAnyKind(false)
+	kind, kindType := g.pickAnyKind(false, 0)
 	anyVal := reflect.Indirect(reflect.New(kindType))
 	switch kind {
 	case reflect.Bool:
@@ -698,6 +721,11 @@ func (g *generator) genAnyValue(t *Matcher) (val reflect.Value, ok bool) {
 			mapVal.SetMapIndex(newKey, newElement)
 		}
 		anyVal.Set(mapVal)
+	case reflect.Struct:
+		for i := 0; i < anyVal.NumField(); i++ {
+			g.fill(anyVal.Field(i), nil)
+		}
+
 	default:
 		return
 	}
@@ -705,75 +733,90 @@ func (g *generator) genAnyValue(t *Matcher) (val reflect.Value, ok bool) {
 	return anyVal, true
 }
 
-func (g *generator) getAnyKind(key bool) (reflect.Kind, reflect.Type) {
-	max := 30
-	if key {
+func (g *generator) pickAnyKind(key bool, depth int) (reflect.Kind, reflect.Type) {
+	max := 34
+	if depth >= g.maxDepth {
 		max = 22
+	}
+	if key {
+		max = 14
 	}
 	i := g.Intn(max)
 
 	switch i {
 	case 0, 1, 2, 3:
-		return reflect.Bool, reflect.TypeOf(true)
-	case 4, 5, 6, 7:
-		return reflect.String, reflect.TypeOf("string")
+		return reflect.String, stringType
+	case 4:
+		return reflect.Int, intType
+	case 5:
+		return reflect.Int8, int8Type
+	case 6:
+		return reflect.Int16, int16Type
+	case 7:
+		return reflect.Int32, int32Type
 	case 8:
-		return reflect.Int, reflect.TypeOf(0)
+		return reflect.Int64, int64Type
 	case 9:
-		return reflect.Int8, reflect.TypeOf(int8(0))
+		return reflect.Uint, uintType
 	case 10:
-		return reflect.Int16, reflect.TypeOf(int16(0))
+		return reflect.Uint8, uint8Type
 	case 11:
-		return reflect.Int32, reflect.TypeOf(int32(0))
+		return reflect.Uint16, uint16Type
 	case 12:
-		return reflect.Int64, reflect.TypeOf(int64(0))
+		return reflect.Uint32, uint32Type
 	case 13:
-		return reflect.Uint, reflect.TypeOf(uint(0))
-	case 14:
-		return reflect.Uint8, reflect.TypeOf(uint8(0))
-	case 15:
-		return reflect.Uint16, reflect.TypeOf(uint16(0))
-	case 16:
-		return reflect.Uint32, reflect.TypeOf(uint32(0))
-	case 17:
-		return reflect.Uint64, reflect.TypeOf(uint64(0))
-	case 18, 19:
-		return reflect.Float32, reflect.TypeOf(float32(0))
-	case 20, 21:
-		return reflect.Float64, reflect.TypeOf(float64(0))
+		return reflect.Uint64, uint64Type
+
+		// non-keys
+	case 14, 15:
+		return reflect.Float32, float32Type
+	case 16, 17:
+		return reflect.Float64, float64Type
+	case 18, 19, 20, 21:
+		return reflect.Bool, boolType
+
+		// depth-limited
 	case 22, 23, 24, 25:
-		_, subType := g.getAnyKind(false)
+		//slice
+		_, subType := g.pickAnyKind(false, depth+1)
 		return reflect.Slice, reflect.SliceOf(subType)
 	case 26, 27, 28, 29:
-		_, keyType := g.getAnyKind(true)
-		_, valueType := g.getAnyKind(false)
+		//map
+		_, keyType := g.pickAnyKind(true, depth+1)
+		_, valueType := g.pickAnyKind(false, depth+1)
 		return reflect.Map, reflect.MapOf(keyType, valueType)
+	case 30, 31, 32, 33:
+		//struct
+		return reflect.Struct, reflect.StructOf(g.makeStructFields(depth))
 	}
 
 	return reflect.Invalid, reflect.TypeOf(nil)
 }
 
-//Int
-//Int8
-//Int16
-//Int32
-//Int64
-//Uint
-//Uint8
-//Uint16
-//Uint32
-//Uint64
-//Uintptr
-//Float32
-//Float64
-//Complex64
-//Complex128
-//Array
-//Chan
-//Func
-//Interface
-//Map
-//Pointer
-//Slice
-//String
-//Struct
+func (g *generator) makeStructFields(depth int) []reflect.StructField {
+	fields := make([]reflect.StructField, g.Intn(5)+1)
+	runes := []rune("abcdefghijklmnopqrstuvwxyz")
+	i := 0
+	for {
+		fieldName := strings.Title(g.fillString(g.Intn(5)+2, runes))
+		dup := false
+		for j := 0; j < i; j++ {
+			if fieldName == fields[j].Name {
+				dup = true
+			}
+		}
+		if dup {
+			continue
+		}
+		_, fieldType := g.pickAnyKind(false, depth+1)
+		fields[i] = reflect.StructField{
+			Name: fieldName,
+			Type: fieldType,
+		}
+		i++
+		if i == len(fields) {
+			break
+		}
+	}
+	return fields
+}
