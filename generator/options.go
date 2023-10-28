@@ -17,14 +17,14 @@ func PointerNilChance(chance float64) Option {
 	}
 }
 
-func PointerNilFn(fn func(x ...Namable) (bool, bool)) Option {
+func PointerNilFn(fn func(t *Matcher) (bool, bool)) Option {
 	return func(g *generator) *generator {
-		g.nilPointerFn = fn
+		g.pointerNilFn = append(g.pointerNilFn, fn)
 		return g
 	}
 }
 
-func BooleanFalseChance(chance float64) Option {
+func BoolFalseChance(chance float64) Option {
 	if chance < 0 || chance > 1 {
 		panic("chance must be in range 0 to 1")
 	}
@@ -34,9 +34,9 @@ func BooleanFalseChance(chance float64) Option {
 	}
 }
 
-func BoolFn(fn func(x ...Namable) (bool, bool)) Option {
+func BoolFalseFn(fn func(t *Matcher) (bool, bool)) Option {
 	return func(g *generator) *generator {
-		g.boolFn = fn
+		g.boolFalseFn = append(g.boolFalseFn, fn)
 		return g
 	}
 }
@@ -46,15 +46,15 @@ func IntRange(min, max int) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minInt = &min
-		g.maxInt = &max
+		g.intSet.min = &min
+		g.intSet.max = &max
 		return g
 	}
 }
 
-func IntFn(fn func(x ...Namable) (int, bool)) Option {
+func IntFn(fn func(t *Matcher) (int, int, bool)) Option {
 	return func(g *generator) *generator {
-		g.intFn = fn
+		g.intSet.fn = append(g.intSet.fn, fn)
 		return g
 	}
 }
@@ -64,15 +64,15 @@ func Int8Range(min, max int8) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minInt8 = &min
-		g.maxInt8 = &max
+		g.int8Set.min = &min
+		g.int8Set.max = &max
 		return g
 	}
 }
 
-func Int8Fn(fn func(x ...Namable) (int8, bool)) Option {
+func Int8Fn(fn func(t *Matcher) (int8, int8, bool)) Option {
 	return func(g *generator) *generator {
-		g.int8Fn = fn
+		g.int8Set.fn = append(g.int8Set.fn, fn)
 		return g
 	}
 }
@@ -82,15 +82,15 @@ func Int16Range(min, max int16) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minInt16 = &min
-		g.maxInt16 = &max
+		g.int16Set.min = &min
+		g.int16Set.max = &max
 		return g
 	}
 }
 
-func Int16Fn(fn func(x ...Namable) (int16, bool)) Option {
+func Int16Fn(fn func(t *Matcher) (int16, int16, bool)) Option {
 	return func(g *generator) *generator {
-		g.int16Fn = fn
+		g.int16Set.fn = append(g.int16Set.fn, fn)
 		return g
 	}
 }
@@ -100,15 +100,15 @@ func Int32Range(min, max int32) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minInt32 = &min
-		g.maxInt32 = &max
+		g.int32Set.min = &min
+		g.int32Set.max = &max
 		return g
 	}
 }
 
-func Int32Fn(fn func(x ...Namable) (int32, bool)) Option {
+func Int32Fn(fn func(t *Matcher) (int32, int32, bool)) Option {
 	return func(g *generator) *generator {
-		g.int32Fn = fn
+		g.int32Set.fn = append(g.int32Set.fn, fn)
 		return g
 	}
 }
@@ -118,15 +118,15 @@ func Int64Range(min, max int64) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minInt64 = &min
-		g.maxInt64 = &max
+		g.int64Set.min = &min
+		g.int64Set.max = &max
 		return g
 	}
 }
 
-func Int64Fn(fn func(x ...Namable) (int64, bool)) Option {
+func Int64Fn(fn func(t *Matcher) (int64, int64, bool)) Option {
 	return func(g *generator) *generator {
-		g.int64Fn = fn
+		g.int64Set.fn = append(g.int64Set.fn, fn)
 		return g
 	}
 }
@@ -136,15 +136,15 @@ func UintRange(min, max uint) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minUint = &min
-		g.maxUint = &max
+		g.uintSet.min = &min
+		g.uintSet.max = &max
 		return g
 	}
 }
 
-func UintFn(fn func(x ...Namable) (uint, bool)) Option {
+func UintFn(fn func(t *Matcher) (uint, uint, bool)) Option {
 	return func(g *generator) *generator {
-		g.uintFn = fn
+		g.uintSet.fn = append(g.uintSet.fn, fn)
 		return g
 	}
 }
@@ -154,15 +154,15 @@ func Uint8Range(min, max uint8) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minUint8 = &min
-		g.maxUint8 = &max
+		g.uint8Set.min = &min
+		g.uint8Set.max = &max
 		return g
 	}
 }
 
-func Uint8Fn(fn func(x ...Namable) (uint8, bool)) Option {
+func Uint8Fn(fn func(t *Matcher) (uint8, uint8, bool)) Option {
 	return func(g *generator) *generator {
-		g.uint8Fn = fn
+		g.uint8Set.fn = append(g.uint8Set.fn, fn)
 		return g
 	}
 }
@@ -172,15 +172,15 @@ func Uint16Range(min, max uint16) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minUint16 = &min
-		g.maxUint16 = &max
+		g.uint16Set.min = &min
+		g.uint16Set.max = &max
 		return g
 	}
 }
 
-func Uint16Fn(fn func(x ...Namable) (uint16, bool)) Option {
+func Uint16Fn(fn func(t *Matcher) (uint16, uint16, bool)) Option {
 	return func(g *generator) *generator {
-		g.uint16Fn = fn
+		g.uint16Set.fn = append(g.uint16Set.fn, fn)
 		return g
 	}
 }
@@ -190,15 +190,15 @@ func Uint32Range(min, max uint32) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minUint32 = &min
-		g.maxUint32 = &max
+		g.uint32Set.min = &min
+		g.uint32Set.max = &max
 		return g
 	}
 }
 
-func Uint32Fn(fn func(x ...Namable) (uint32, bool)) Option {
+func Uint32Fn(fn func(t *Matcher) (uint32, uint32, bool)) Option {
 	return func(g *generator) *generator {
-		g.uint32Fn = fn
+		g.uint32Set.fn = append(g.uint32Set.fn, fn)
 		return g
 	}
 }
@@ -208,15 +208,15 @@ func Uint64Range(min, max uint64) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minUint64 = &min
-		g.maxUint64 = &max
+		g.uint64Set.min = &min
+		g.uint64Set.max = &max
 		return g
 	}
 }
 
-func Uint64Fn(fn func(x ...Namable) (uint64, bool)) Option {
+func Uint64Fn(fn func(t *Matcher) (uint64, uint64, bool)) Option {
 	return func(g *generator) *generator {
-		g.uint64Fn = fn
+		g.uint64Set.fn = append(g.uint64Set.fn, fn)
 		return g
 	}
 }
@@ -226,15 +226,15 @@ func Float32Range(min, max float32) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minFloat32 = &min
-		g.maxFloat32 = &max
+		g.float32Set.min = &min
+		g.float32Set.max = &max
 		return g
 	}
 }
 
-func Float32Fn(fn func(x ...Namable) (float32, bool)) Option {
+func Float32Fn(fn func(t *Matcher) (float32, float32, bool)) Option {
 	return func(g *generator) *generator {
-		g.float32Fn = fn
+		g.float32Set.fn = append(g.float32Set.fn, fn)
 		return g
 	}
 }
@@ -244,33 +244,43 @@ func Float64Range(min, max float64) Option {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minFloat64 = &min
-		g.maxFloat64 = &max
+		g.float64Set.min = &min
+		g.float64Set.max = &max
 		return g
 	}
 }
 
-func Float64Fn(fn func(x ...Namable) (float64, bool)) Option {
+func Float64Fn(fn func(t *Matcher) (float64, float64, bool)) Option {
 	return func(g *generator) *generator {
-		g.float64Fn = fn
+		g.float64Set.fn = append(g.float64Set.fn, fn)
 		return g
 	}
 }
 
-func StringLenRange(min, max uint) Option {
+func StringLenRange(min, max int) Option {
+	if min < 0 {
+		panic("min may not be lower than zero")
+	}
 	if min > max {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minStrLen = &min
-		g.maxStrLen = &max
+		g.stringLenSet.min = &min
+		g.stringLenSet.max = &max
 		return g
 	}
 }
 
-func StringFn(fn func(x ...Namable) (string, bool)) Option {
+func StringLenFn(fn func(t *Matcher) (int, int, bool)) Option {
 	return func(g *generator) *generator {
-		g.stringFn = fn
+		g.stringLenSet.fn = append(g.stringLenSet.fn, fn)
+		return g
+	}
+}
+
+func StringFn(fn func(t *Matcher) (string, bool)) Option {
+	return func(g *generator) *generator {
+		g.stringFn = append(g.stringFn, fn)
 		return g
 	}
 }
@@ -282,38 +292,44 @@ func Runes(runes []rune) Option {
 	}
 }
 
-func SliceLenRange(min, max uint) Option {
+func SliceLenRange(min, max int) Option {
+	if min < 0 {
+		panic("min may not be lower than zero")
+	}
 	if min > max {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minSliceLen = &min
-		g.maxSliceLen = &max
+		g.sliceLenSet.min = &min
+		g.sliceLenSet.max = &max
 		return g
 	}
 }
 
-func SliceLenFn(fn func(x ...Namable) (int, bool)) Option {
+func SliceLenFn(fn func(t *Matcher) (int, int, bool)) Option {
 	return func(g *generator) *generator {
-		g.sliceLenFn = fn
+		g.sliceLenSet.fn = append(g.sliceLenSet.fn, fn)
 		return g
 	}
 }
 
-func MapLenRange(min, max uint) Option {
+func MapLenRange(min, max int) Option {
+	if min < 0 {
+		panic("min may not be lower than zero")
+	}
 	if min > max {
 		panic("min may not exceed max")
 	}
 	return func(g *generator) *generator {
-		g.minMapLen = &min
-		g.maxMapLen = &max
+		g.mapLenSet.min = &min
+		g.mapLenSet.max = &max
 		return g
 	}
 }
 
-func MapLenFn(fn func(x ...Namable) (int, bool)) Option {
+func MapLenFn(fn func(t *Matcher) (int, int, bool)) Option {
 	return func(g *generator) *generator {
-		g.mapLenFn = fn
+		g.mapLenSet.fn = append(g.mapLenSet.fn, fn)
 		return g
 	}
 }

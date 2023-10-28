@@ -23,6 +23,7 @@ type PseudoRandom interface {
 }
 
 type InclusiveRand interface {
+	InclusiveIntn(min, max int32) int32
 	InclusiveInt32n(min, max int32) int32
 	InclusiveUint32n(min, max uint32) uint32
 	InclusiveInt64n(min, max int64) int64
