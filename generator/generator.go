@@ -118,7 +118,6 @@ func (g *generator) genBool(t *Matcher) bool {
 func (g *generator) genUseNilPointer(t *Matcher) bool {
 	for _, fn := range g.pointerNilFn {
 		if out, ok := fn(t); ok {
-			fmt.Printf("returning %v\n", out)
 			return out
 		}
 	}
