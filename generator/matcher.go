@@ -17,26 +17,26 @@ type Matcher struct {
 	sliceLen    bool
 }
 
-func (t *Matcher) MatchesA(a any) bool {
-	given := reflect.TypeOf(a)
-	if given.Kind() == reflect.Pointer {
-		given = given.Elem()
+func indirect(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Pointer {
+		return t.Elem()
 	}
-	return t.currentType == given
+	return t
+}
+
+func matches(t1, t2 reflect.Type) bool {
+	return indirect(t1) == indirect(t2)
+}
+
+func (t *Matcher) MatchesA(a any) bool {
+	return matches(t.currentType, reflect.TypeOf(a))
 }
 
 func (t *Matcher) MatchesAFieldOf(a any, names ...string) bool {
 	if t.parent == nil || t.parent.field == nil {
 		return false
 	}
-	if t.parent.Kind() != reflect.Struct {
-		return false
-	}
-	given := reflect.TypeOf(a)
-	if given.Kind() == reflect.Pointer {
-		given = given.Elem()
-	}
-	if t.parent.currentType != given {
+	if !matches(t.parent.currentType, reflect.TypeOf(a)) {
 		return false
 	}
 	for _, name := range names {
@@ -44,37 +44,26 @@ func (t *Matcher) MatchesAFieldOf(a any, names ...string) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
 func (t *Matcher) IsAMapKeyOf(a any) bool {
-	given := reflect.TypeOf(a)
-	if given.Kind() == reflect.Pointer {
-		given = given.Elem()
-	}
 	if t.parent == nil || t.parent.Kind() != reflect.Map {
 		return false
 	}
-	if t.parent.currentType != given {
+	if !matches(t.parent.currentType, reflect.TypeOf(a)) {
 		return false
 	}
-
 	return t.parent.mapKey
 }
 
 func (t *Matcher) IsAMapValueOf(a any) bool {
-	given := reflect.TypeOf(a)
-	if given.Kind() == reflect.Pointer {
-		given = given.Elem()
-	}
 	if t.parent == nil || t.parent.Kind() != reflect.Map {
 		return false
 	}
-	if t.parent.currentType != given {
+	if !matches(t.parent.currentType, reflect.TypeOf(a)) {
 		return false
 	}
-
 	return t.parent.mapValue
 }
 
@@ -91,7 +80,7 @@ func (t *Matcher) PkgPath() string {
 }
 
 func (t *Matcher) Kind() reflect.Kind {
-	return t.currentType.Kind()
+	return indirect(t.currentType).Kind()
 }
 
 func (t *Matcher) Parent() *Matcher {
