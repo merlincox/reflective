@@ -701,23 +701,23 @@ func (g *generator) genAnyValue(t *Matcher) (val reflect.Value, ok bool) {
 		randVal := g.genFloat64(t)
 		anyVal.SetFloat(randVal)
 	case reflect.Slice:
-		size := g.genSliceLen(t.forSliceLen(t.current))
+		size := g.genSliceLen(t.forSliceLen(t.currentType))
 		subType := kindType.Elem()
 		sliceVal := reflect.MakeSlice(reflect.SliceOf(subType), 0, size)
 		for i := 0; i < size; i++ {
 			subVal := reflect.Indirect(reflect.New(subType))
-			g.fill(subVal, t.forSlice(t.current, i))
+			g.fill(subVal, t.forSlice(t.currentType, i))
 			sliceVal = reflect.Append(sliceVal, subVal)
 		}
 		anyVal.Set(sliceVal)
 	case reflect.Map:
 		mapVal := reflect.MakeMap(kindType)
-		size := g.genMapLen(t.forMapLen(t.current))
+		size := g.genMapLen(t.forMapLen(t.currentType))
 		for i := 0; i < size; i++ {
 			newElement := reflect.Indirect(reflect.New(kindType.Elem()))
-			g.fill(newElement, t.forMapValue(t.current))
+			g.fill(newElement, t.forMapValue(t.currentType))
 			newKey := reflect.Indirect(reflect.New(kindType.Key()))
-			g.fill(newKey, t.forMapKey(t.current))
+			g.fill(newKey, t.forMapKey(t.currentType))
 			mapVal.SetMapIndex(newKey, newElement)
 		}
 		anyVal.Set(mapVal)

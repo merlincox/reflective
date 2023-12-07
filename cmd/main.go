@@ -25,8 +25,6 @@ type TestStruct struct {
 	Unknown2     any
 	Unknown3     any
 	AnonStruct
-	RuneVal   rune
-	ByteSlice []byte
 }
 
 type SubStruct struct {
@@ -45,7 +43,7 @@ func main() {
 	g, _ := generator.New(
 		generator.IntFn(
 			func(m *generator.Matcher) (int, int, bool) {
-				if m.MatchesAFieldOf(SubStruct{}, "Field1") {
+				if m.MatchesAFieldOf(&SubStruct{}, "Field1", "Field2") {
 					return -99, -99, true
 				}
 				return 0, 0, false
