@@ -16,7 +16,7 @@ const (
 	defMaxMapLen        = 16
 	defNilPointerRatio  = 0.5
 	defBooleanTrueRatio = 0.5
-	defMaxInt           = int64(math.MaxInt8)
+	defMaxInt           = int(math.MaxInt8)
 	defMaxFloat         = float64(math.MaxInt8)
 )
 
@@ -72,9 +72,13 @@ type generator struct {
 }
 
 type nset[T numeric] struct {
-	min *T
-	max *T
-	fn  []func(t *Matcher) (T, T, bool)
+	minmax *minmax[T]
+	fn     []func(t *Matcher) (T, T, bool)
+}
+
+type minmax[T numeric] struct {
+	min T
+	max T
 }
 
 // Option defines an option for customising the generator
@@ -153,11 +157,9 @@ func (g *generator) genString(t *Matcher) string {
 		}
 	}
 	if !found {
-		if set.max != nil {
-			max = *set.max
-		}
-		if set.min != nil {
-			max = *set.min
+		if set.minmax != nil {
+			max = set.minmax.max
+			max = set.minmax.min
 		}
 	}
 	if max == 0 {
@@ -190,13 +192,9 @@ func (g *generator) genFloat32(t *Matcher) float32 {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = *set.min
-		}
-		if set.max != nil {
-			max = *set.max
-		}
+	if !found && set.minmax != nil {
+		max = set.minmax.max
+		max = set.minmax.min
 	}
 	var divisor float32 = 2.0
 
@@ -215,13 +213,9 @@ func (g *generator) genFloat64(t *Matcher) float64 {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = *set.min
-		}
-		if set.max != nil {
-			max = *set.max
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
 	var divisor = 2.0
 
@@ -240,13 +234,9 @@ func (g *generator) genSliceLen(t *Matcher) int {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.max != nil {
-			max = *set.max
-		}
-		if set.min != nil {
-			min = *set.min
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
 	if max == 0 || max == min {
 		return max
@@ -266,13 +256,9 @@ func (g *generator) genMapLen(t *Matcher) int {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.max != nil {
-			max = *set.max
-		}
-		if set.min != nil {
-			min = *set.min
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
 	if max == 0 || max == min {
 		return max
@@ -282,71 +268,54 @@ func (g *generator) genMapLen(t *Matcher) int {
 
 func (g *generator) genInt(t *Matcher) int {
 	set := g.intSet
-	var min, max int64 = 0, defMaxInt
-	var found bool
-	for _, fn := range g.intSet.fn {
-		if fmin, fmax, ok := fn(t); ok {
-			if fmin == fmax {
-				return fmin
-			}
-			min, max, found = int64(fmin), int64(fmax), true
-		}
-	}
-	if !found {
-		if set.min != nil {
-			min = int64(*set.min)
-		}
-		if set.max != nil {
-			max = int64(*set.max)
-		}
-	}
-	return int(g.InclusiveInt64n(min, max))
+	return genNumeric(set, t, g)
 }
 
 func (g *generator) genInt8(t *Matcher) int8 {
 	set := g.int8Set
-	var min, max int32 = 0, int32(defMaxInt)
-	var found bool
-	for _, fn := range set.fn {
-		if fmin, fmax, ok := fn(t); ok {
-			if fmin == fmax {
-				return fmin
-			}
-			min, max, found = int32(fmin), int32(fmax), true
-		}
-	}
-	if !found {
-		if set.min != nil {
-			min = int32(*set.min)
-		}
-		if set.max != nil {
-			max = int32(*set.max)
-		}
-	}
-	return int8(g.InclusiveInt32n(min, max))
+	return genNumeric(set, t, g)
 }
 
 func (g *generator) genInt16(t *Matcher) int16 {
 	set := g.int16Set
-	var min, max int32 = 0, int32(defMaxInt)
+	var min, max int16 = 0, int16(defMaxInt)
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
 			if fmin == fmax {
 				return fmin
 			}
-			min, max, found = int32(fmin), int32(fmax), true
+			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = int32(*set.min)
-		}
-		if set.max != nil {
-			max = int32(*set.max)
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
+	}
+	return int16(g.InclusiveInt32n(int32(min), int32(max)))
+}
+
+func genNumeric[T numeric](set nset[T], t *Matcher, g *generator) T {
+	mm := defaultMinMax[T]()
+	var found bool
+	for _, fn := range set.fn {
+		if min, max, ok := fn(t); ok {
+			if min == max {
+				return min
+			}
+			mm.min = min
+			mm.max = max
+			found = true
 		}
 	}
-	return int16(g.InclusiveInt32n(min, max))
+	if !found && set.minmax != nil {
+		mm = *set.minmax
+	}
+	switch any(mm.min).(type) {
+	case int, int64:
+		return T(g.InclusiveInt64n(int64(mm.min), int64(mm.max)))
+	}
+	return T(g.InclusiveInt32n(int32(mm.min), int32(mm.max)))
 }
 
 func (g *generator) genInt32(t *Matcher) int32 {
@@ -361,20 +330,16 @@ func (g *generator) genInt32(t *Matcher) int32 {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = *set.min
-		}
-		if set.max != nil {
-			max = *set.max
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
 	return g.InclusiveInt32n(min, max)
 }
 
 func (g *generator) genInt64(t *Matcher) int64 {
 	set := g.int64Set
-	var min, max int64 = 0, defMaxInt
+	var min, max int64 = 0, int64(defMaxInt)
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
@@ -384,84 +349,68 @@ func (g *generator) genInt64(t *Matcher) int64 {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if g.int64Set.min != nil {
-			min = *set.min
-		}
-		if g.int64Set.max != nil {
-			max = *set.max
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
 	return g.InclusiveInt64n(min, max)
 }
 
 func (g *generator) genUint(t *Matcher) uint {
 	set := g.uintSet
-	var min, max uint64 = 0, uint64(defMaxInt)
+	var min, max uint = 0, uint(defMaxInt)
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
 			if fmin == fmax {
 				return fmin
 			}
-			min, max, found = uint64(fmin), uint64(fmax), true
+			min, max, found = min, fmax, true
 		}
 	}
-	if !found {
-		if g.uintSet.min != nil {
-			min = uint64(*set.min)
-		}
-		if g.uintSet.max != nil {
-			max = uint64(*set.max)
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
-	return uint(g.InclusiveUint64n(min, max))
+	return uint(g.InclusiveUint64n(uint64(min), uint64(max)))
 }
 
 func (g *generator) genUint8(t *Matcher) uint8 {
 	set := g.uint8Set
-	var min, max uint32 = 0, uint32(defMaxInt)
+	var min, max uint8 = 0, uint8(defMaxInt)
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
 			if fmin == fmax {
 				return fmin
 			}
-			min, max, found = uint32(fmin), uint32(fmax), true
+			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = uint32(*set.min)
-		}
-		if set.max != nil {
-			max = uint32(*set.max)
-		}
+	if !found && set.minmax != nil {
+		max = set.minmax.max
+		max = set.minmax.min
 	}
-	return uint8(g.InclusiveUint32n(min, max))
+	return uint8(g.InclusiveUint32n(uint32(min), uint32(max)))
 }
 
 func (g *generator) genUint16(t *Matcher) uint16 {
 	set := g.uint16Set
-	var min, max uint32 = 0, uint32(defMaxInt)
+	var min, max uint16 = 0, uint16(defMaxInt)
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
 			if fmin == fmax {
 				return fmin
 			}
-			min, max, found = uint32(fmin), uint32(fmax), true
+			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = uint32(*set.min)
-		}
-		if set.max != nil {
-			max = uint32(*set.max)
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
-	return uint16(g.InclusiveUint32n(min, max))
+	return uint16(g.InclusiveUint32n(uint32(min), uint32(max)))
 }
 
 func (g *generator) genUint32(t *Matcher) uint32 {
@@ -476,13 +425,9 @@ func (g *generator) genUint32(t *Matcher) uint32 {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = *set.min
-		}
-		if set.max != nil {
-			max = *set.max
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
 	return g.InclusiveUint32n(min, max)
 }
@@ -499,15 +444,10 @@ func (g *generator) genUint64(t *Matcher) uint64 {
 			min, max, found = fmin, fmax, true
 		}
 	}
-	if !found {
-		if set.min != nil {
-			min = *set.min
-		}
-		if set.max != nil {
-			max = *set.max
-		}
+	if !found && set.minmax != nil {
+		min = set.minmax.min
+		max = set.minmax.max
 	}
-
 	return g.InclusiveUint64n(min, max)
 }
 

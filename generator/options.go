@@ -36,6 +36,7 @@ func BoolTrueRatio(ratio float64) Option {
 	}
 }
 
+// BoolTrueFn registers a function for determining the chance of a boolean being true
 func BoolTrueFn(fn func(t *Matcher) (float64, bool)) Option {
 	return func(g *generator) (*generator, error) {
 		g.boolTrueFn = append(g.boolTrueFn, fn)
@@ -43,15 +44,70 @@ func BoolTrueFn(fn func(t *Matcher) (float64, bool)) Option {
 	}
 }
 
-func IntRange(min, max int) Option {
+type stringLenInt int
+type mapLenInt int
+type sliceLenInt int
+
+func numericRange[T numeric](min, max T) Option {
 	return func(g *generator) (*generator, error) {
 		if min > max {
-			return nil, fmt.Errorf("IntRange: min may not exceed max")
+			return nil, fmt.Errorf("numeric range: min may not exceed max")
 		}
-		g.intSet.min = &min
-		g.intSet.max = &max
+		switch any(min).(type) {
+		case int:
+			g.intSet.minmax = &minmax[int]{min: int(min), max: int(max)}
+		case stringLenInt:
+			g.stringLenSet.minmax = &minmax[int]{min: int(min), max: int(max)}
+		case mapLenInt:
+			g.mapLenSet.minmax = &minmax[int]{min: int(min), max: int(max)}
+		case sliceLenInt:
+			g.sliceLenSet.minmax = &minmax[int]{min: int(min), max: int(max)}
+		case int8:
+			g.int8Set.minmax = &minmax[int8]{min: int8(min), max: int8(max)}
+		case int16:
+			g.int16Set.minmax = &minmax[int16]{min: int16(min), max: int16(max)}
+		case int32:
+			g.int32Set.minmax = &minmax[int32]{min: int32(min), max: int32(max)}
+		case int64:
+			g.int64Set.minmax = &minmax[int64]{min: int64(min), max: int64(max)}
+		case uint:
+			g.uintSet.minmax = &minmax[uint]{min: uint(min), max: uint(max)}
+		case uint8:
+			g.uint8Set.minmax = &minmax[uint8]{min: uint8(min), max: uint8(max)}
+		case uint16:
+			g.uint16Set.minmax = &minmax[uint16]{min: uint16(min), max: uint16(max)}
+		case uint32:
+			g.uint32Set.minmax = &minmax[uint32]{min: uint32(min), max: uint32(max)}
+		case uint64:
+			g.uint64Set.minmax = &minmax[uint64]{min: uint64(min), max: uint64(max)}
+		case float32:
+			g.float32Set.minmax = &minmax[float32]{min: float32(min), max: float32(max)}
+		case float64:
+			g.float64Set.minmax = &minmax[float64]{min: float64(min), max: float64(max)}
+		}
 		return g, nil
 	}
+}
+
+func defaultMinMax[T numeric]() minmax[T] {
+	var some T
+	switch any(some).(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return minmax[T]{min: 0, max: T(defMaxInt)}
+	case stringLenInt:
+		return minmax[T]{min: T(defMinStrLen), max: T(defMaxStrLen)}
+	case mapLenInt:
+		return minmax[T]{min: T(defMinMapLen), max: T(defMaxMapLen)}
+	case sliceLenInt:
+		return minmax[T]{min: T(defMinSliceLen), max: T(defMaxSliceLen)}
+	case float32, float64:
+		return minmax[T]{min: 0, max: T(defMaxFloat)}
+	}
+	panic("unsupported numeric type")
+}
+
+func IntRange(min, max int) Option {
+	return numericRange(min, max)
 }
 
 func IntFn(fn func(t *Matcher) (int, int, bool)) Option {
@@ -62,14 +118,7 @@ func IntFn(fn func(t *Matcher) (int, int, bool)) Option {
 }
 
 func Int8Range(min, max int8) Option {
-	return func(g *generator) (*generator, error) {
-		if min > max {
-			return nil, fmt.Errorf("Int8Range: min may not exceed max")
-		}
-		g.int8Set.min = &min
-		g.int8Set.max = &max
-		return g, nil
-	}
+	return numericRange(min, max)
 }
 
 func Int8Fn(fn func(t *Matcher) (int8, int8, bool)) Option {
@@ -84,8 +133,7 @@ func Int16Range(min, max int16) Option {
 		if min > max {
 			return nil, fmt.Errorf("Int16Range: min may not exceed max")
 		}
-		g.int16Set.min = &min
-		g.int16Set.max = &max
+		g.int16Set.minmax = &minmax[int16]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -102,8 +150,7 @@ func Int32Range(min, max int32) Option {
 		if min > max {
 			return nil, fmt.Errorf("Int32Range: min may not exceed max")
 		}
-		g.int32Set.min = &min
-		g.int32Set.max = &max
+		g.int32Set.minmax = &minmax[int32]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -120,8 +167,7 @@ func Int64Range(min, max int64) Option {
 		if min > max {
 			return nil, fmt.Errorf("Int64Range: min may not exceed max")
 		}
-		g.int64Set.min = &min
-		g.int64Set.max = &max
+		g.int64Set.minmax = &minmax[int64]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -138,8 +184,7 @@ func UintRange(min, max uint) Option {
 		if min > max {
 			return nil, fmt.Errorf("UintRange: min may not exceed max")
 		}
-		g.uintSet.min = &min
-		g.uintSet.max = &max
+		g.uintSet.minmax = &minmax[uint]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -156,8 +201,7 @@ func Uint8Range(min, max uint8) Option {
 		if min > max {
 			return nil, fmt.Errorf("Uint8Range: min may not exceed max")
 		}
-		g.uint8Set.min = &min
-		g.uint8Set.max = &max
+		g.uint8Set.minmax = &minmax[uint8]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -174,8 +218,7 @@ func Uint16Range(min, max uint16) Option {
 		if min > max {
 			return nil, fmt.Errorf("Uint16Range: min may not exceed max")
 		}
-		g.uint16Set.min = &min
-		g.uint16Set.max = &max
+		g.uint16Set.minmax = &minmax[uint16]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -192,8 +235,7 @@ func Uint32Range(min, max uint32) Option {
 		if min > max {
 			return nil, fmt.Errorf("Uint32Range: min may not exceed max")
 		}
-		g.uint32Set.min = &min
-		g.uint32Set.max = &max
+		g.uint32Set.minmax = &minmax[uint32]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -210,8 +252,7 @@ func Uint64Range(min, max uint64) Option {
 		if min > max {
 			return nil, fmt.Errorf("Uint64Range: min may not exceed max")
 		}
-		g.uint64Set.min = &min
-		g.uint64Set.max = &max
+		g.uint64Set.minmax = &minmax[uint64]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -228,8 +269,7 @@ func Float32Range(min, max float32) Option {
 		if min > max {
 			return nil, fmt.Errorf("Float32Range: min may not exceed max")
 		}
-		g.float32Set.min = &min
-		g.float32Set.max = &max
+		g.float32Set.minmax = &minmax[float32]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -246,8 +286,7 @@ func Float64Range(min, max float64) Option {
 		if min > max {
 			return nil, fmt.Errorf("Float64Range: min may not exceed max")
 		}
-		g.float64Set.min = &min
-		g.float64Set.max = &max
+		g.float64Set.minmax = &minmax[float64]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -267,8 +306,7 @@ func StringLenRange(min, max int) Option {
 		if min > max {
 			return nil, fmt.Errorf("StringLenRange: min may not exceed max")
 		}
-		g.stringLenSet.min = &min
-		g.stringLenSet.max = &max
+		g.stringLenSet.minmax = &minmax[int]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -302,8 +340,7 @@ func SliceLenRange(min, max int) Option {
 		if min > max {
 			return nil, fmt.Errorf("SliceLenRange: min may not exceed max")
 		}
-		g.sliceLenSet.min = &min
-		g.sliceLenSet.max = &max
+		g.sliceLenSet.minmax = &minmax[int]{min: min, max: max}
 		return g, nil
 	}
 }
@@ -323,8 +360,7 @@ func MapLenRange(min, max int) Option {
 		if min > max {
 			return nil, fmt.Errorf("MapLenRange: min may not exceed max")
 		}
-		g.mapLenSet.min = &min
-		g.mapLenSet.max = &max
+		g.mapLenSet.minmax = &minmax[int]{min: min, max: max}
 		return g, nil
 	}
 }
