@@ -9,36 +9,36 @@ func UsePseudoRandom(rand PseudoRandom) Option {
 	}
 }
 
-func PointerNilChance(chance float64) Option {
+func PointerNilRatio(ratio float64) Option {
 	return func(g *generator) (*generator, error) {
-		if chance < 0 || chance > 1 {
-			return nil, fmt.Errorf("PointerNilChance: chance must be in range 0 to 1")
+		if ratio < 0 || ratio > 1 {
+			return nil, fmt.Errorf("PointerNilRatio: ratio must be in range 0 to 1")
 		}
-		g.pointerNilChance = &chance
+		g.pointerNilRatio = &ratio
 		return g, nil
 	}
 }
 
-func PointerNilFn(fn func(t *Matcher) (bool, bool)) Option {
+func PointerNilFn(fn func(t *Matcher) (float64, bool)) Option {
 	return func(g *generator) (*generator, error) {
 		g.pointerNilFn = append(g.pointerNilFn, fn)
 		return g, nil
 	}
 }
 
-func BoolFalseChance(chance float64) Option {
+func BoolTrueRatio(ratio float64) Option {
 	return func(g *generator) (*generator, error) {
-		if chance < 0 || chance > 1 {
-			return nil, fmt.Errorf("BoolFalseChance: chance must be in range 0 to 1")
+		if ratio < 0 || ratio > 1 {
+			return nil, fmt.Errorf("BoolTrueRatio: ratio must be in range 0 to 1")
 		}
-		g.booleanFalseChance = &chance
+		g.booleanTrueRatio = &ratio
 		return g, nil
 	}
 }
 
-func BoolFalseFn(fn func(t *Matcher) (bool, bool)) Option {
+func BoolTrueFn(fn func(t *Matcher) (float64, bool)) Option {
 	return func(g *generator) (*generator, error) {
-		g.boolFalseFn = append(g.boolFalseFn, fn)
+		g.boolTrueFn = append(g.boolTrueFn, fn)
 		return g, nil
 	}
 }

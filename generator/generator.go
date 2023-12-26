@@ -8,16 +8,16 @@ import (
 )
 
 const (
-	defMinStrLen          = 4
-	defMaxStrLen          = 16
-	defMinSliceLen        = 2
-	defMaxSliceLen        = 16
-	defMinMapLen          = 2
-	defMaxMapLen          = 16
-	defNilPointerChance   = 0.5
-	defBooleanFalseChance = 0.5
-	defMaxInt             = int64(math.MaxInt8)
-	defMaxFloat           = float64(math.MaxInt8)
+	defMinStrLen        = 4
+	defMaxStrLen        = 16
+	defMinSliceLen      = 2
+	defMaxSliceLen      = 16
+	defMinMapLen        = 2
+	defMaxMapLen        = 16
+	defNilPointerRatio  = 0.5
+	defBooleanTrueRatio = 0.5
+	defMaxInt           = int64(math.MaxInt8)
+	defMaxFloat         = float64(math.MaxInt8)
 )
 
 var (
@@ -46,13 +46,13 @@ type numeric interface {
 type generator struct {
 	rand PseudoRandom
 
-	maxDepth           int
-	runes              []rune
-	stringFn           []func(t *Matcher) (string, bool)
-	booleanFalseChance *float64
-	boolFalseFn        []func(t *Matcher) (bool, bool)
-	pointerNilChance   *float64
-	pointerNilFn       []func(t *Matcher) (bool, bool)
+	maxDepth         int
+	runes            []rune
+	stringFn         []func(t *Matcher) (string, bool)
+	booleanTrueRatio *float64
+	boolTrueFn       []func(t *Matcher) (float64, bool)
+	pointerNilRatio  *float64
+	pointerNilFn     []func(t *Matcher) (float64, bool)
 
 	stringLenSet nset[int]
 	mapLenSet    nset[int]
@@ -102,30 +102,40 @@ func (g *generator) WithOptions(options ...Option) (*generator, error) {
 	return g, nil
 }
 
+func (g *generator) chanceTrue(ratio float64) bool {
+	if ratio <= 0 {
+		return false
+	}
+	if ratio >= 1 {
+		return true
+	}
+	return g.Float64() >= ratio
+}
+
 func (g *generator) genBool(t *Matcher) bool {
-	for _, fn := range g.boolFalseFn {
+	for _, fn := range g.boolTrueFn {
 		if out, ok := fn(t); ok {
-			return out
+			return g.chanceTrue(out)
 		}
 	}
-	chance := defBooleanFalseChance
-	if g.booleanFalseChance != nil {
-		chance = *g.booleanFalseChance
+	ratio := defBooleanTrueRatio
+	if g.booleanTrueRatio != nil {
+		ratio = *g.booleanTrueRatio
 	}
-	return g.Float64() >= chance
+	return g.chanceTrue(ratio)
 }
 
 func (g *generator) genUseNilPointer(t *Matcher) bool {
 	for _, fn := range g.pointerNilFn {
 		if out, ok := fn(t); ok {
-			return out
+			return g.chanceTrue(out)
 		}
 	}
-	chance := defNilPointerChance
-	if g.pointerNilChance != nil {
-		chance = *g.pointerNilChance
+	ratio := defNilPointerRatio
+	if g.pointerNilRatio != nil {
+		ratio = *g.pointerNilRatio
 	}
-	return g.Float64() < chance
+	return g.chanceTrue(ratio)
 }
 
 func (g *generator) genString(t *Matcher) string {
@@ -224,8 +234,8 @@ func (g *generator) genSliceLen(t *Matcher) int {
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
-			if fmin == fmax {
-				return fmin
+			if fmax == 0 || fmax == fmin {
+				return fmax
 			}
 			min, max, found = fmin, fmax, true
 		}
@@ -235,11 +245,11 @@ func (g *generator) genSliceLen(t *Matcher) int {
 			max = *set.max
 		}
 		if set.min != nil {
-			max = *set.min
+			min = *set.min
 		}
 	}
-	if max == 0 {
-		return 0
+	if max == 0 || max == min {
+		return max
 	}
 	return g.Intn(max-min) + min
 }
@@ -250,8 +260,8 @@ func (g *generator) genMapLen(t *Matcher) int {
 	var found bool
 	for _, fn := range set.fn {
 		if fmin, fmax, ok := fn(t); ok {
-			if fmin == fmax {
-				return fmin
+			if fmax == 0 || fmax == fmin {
+				return fmax
 			}
 			min, max, found = fmin, fmax, true
 		}
@@ -261,11 +271,11 @@ func (g *generator) genMapLen(t *Matcher) int {
 			max = *set.max
 		}
 		if set.min != nil {
-			max = *set.min
+			min = *set.min
 		}
 	}
-	if max == 0 {
-		return 0
+	if max == 0 || max == min {
+		return max
 	}
 	return g.Intn(max-min) + min
 }

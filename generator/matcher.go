@@ -15,6 +15,7 @@ type Matcher struct {
 	imaginary   bool
 	mapLen      bool
 	sliceLen    bool
+	name        string
 }
 
 func indirect(t reflect.Type) reflect.Type {
@@ -94,6 +95,7 @@ func (t *Matcher) HasParent() bool {
 func (t *Matcher) forType(current reflect.Type) *Matcher {
 	return &Matcher{
 		currentType: current,
+		name:        current.String(),
 		parent:      t,
 	}
 }

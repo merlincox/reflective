@@ -17,14 +17,15 @@ const (
 )
 
 type TestStruct struct {
-	Enumval      SomeEnum
-	SubStructVal SubStruct
-	MapVal       map[string]int
-	SliceVal     []string
-	Unknown      any
-	Unknown2     any
-	Unknown3     any
-	AnonStruct
+	//Enumval      SomeEnum
+	//SubStructVal SubStruct
+	//MapVal       map[string]int
+	SliceVal  []*SubStruct
+	SliceVal2 []*AnonStruct
+	//Unknown      any
+	//Unknown2     any
+	//Unknown3     any
+	//AnonStruct
 }
 
 type SubStruct struct {
@@ -38,6 +39,27 @@ type AnonStruct struct {
 }
 
 func main() {
+	g, _ := generator.New()
+
+	target := g.Float64()
+	fmt.Printf("target: %v %%\n", target*100)
+	max := 1000000000
+	hits := 0
+
+	for i := 1; i <= max; i++ {
+		hit := g.Float64() <= target
+		if hit {
+			hits++
+		}
+	}
+
+	actual := float64(hits) / float64(max)
+	fmt.Printf("actual: %v %%\n", actual*100)
+	fmt.Printf("divergence: %v %%\n", (target-actual)*100)
+
+}
+
+func main2() {
 	tester := TestStruct{}
 
 	g, _ := generator.New(
@@ -50,6 +72,15 @@ func main() {
 			}),
 	)
 	g, _ = g.WithOptions(
+
+		generator.PointerNilFn(
+			func(t *generator.Matcher) (float64, bool) {
+				if t.MatchesA(&SubStruct{}) {
+					return 0, true
+				}
+				return 1, true
+			},
+		),
 
 		generator.IntFn(
 			func(m *generator.Matcher) (int, int, bool) {
