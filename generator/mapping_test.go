@@ -1,13 +1,13 @@
 package generator
 
 import (
-	"github.com/stretchr/testify/assert"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMapping(t *testing.T) {
-
 	assert.Equal(t, mapU64ToI64(mapI64ToU64(math.MinInt64)), int64(math.MinInt64))
 	assert.Equal(t, mapU64ToI64(mapI64ToU64(-1000)), int64(-1000))
 	assert.Equal(t, mapU64ToI64(mapI64ToU64(0)), int64(0))

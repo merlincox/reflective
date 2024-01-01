@@ -39,7 +39,7 @@ type AnonStruct struct {
 }
 
 func main() {
-	g, _ := generator.New()
+	g := generator.New()
 
 	target := g.Float64()
 	fmt.Printf("target: %v %%\n", target*100)
@@ -62,8 +62,10 @@ func main() {
 func main2() {
 	tester := TestStruct{}
 
-	g, _ := generator.New(
-		generator.IntFn(
+	g := generator.New()
+
+	g, _ = g.WithOptions(
+		generator.WithIntFn(
 			func(m *generator.Matcher) (int, int, bool) {
 				if m.MatchesAFieldOf(&SubStruct{}, "Field1", "Field2") {
 					return -99, -99, true
@@ -73,7 +75,7 @@ func main2() {
 	)
 	g, _ = g.WithOptions(
 
-		generator.PointerNilFn(
+		generator.WithPointerNilRatioFn(
 			func(t *generator.Matcher) (float64, bool) {
 				if t.MatchesA(&SubStruct{}) {
 					return 0, true
@@ -82,7 +84,7 @@ func main2() {
 			},
 		),
 
-		generator.IntFn(
+		generator.WithIntFn(
 			func(m *generator.Matcher) (int, int, bool) {
 				if m.MatchesA(enumMin) {
 					return int(enumMin), int(enumMax), true
@@ -90,7 +92,7 @@ func main2() {
 				return 0, 0, false
 			}),
 
-		generator.IntFn(
+		generator.WithIntFn(
 			func(m *generator.Matcher) (int, int, bool) {
 				if m.IsAMapValueOf(map[string]int{}) {
 

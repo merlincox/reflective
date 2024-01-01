@@ -48,15 +48,16 @@ type numeric interface {
 }
 
 type generator struct {
-	rand PseudoRandom
+	rand Randomiser
 
 	maxDepth         int
 	runes            []rune
-	stringFn         []func(t *Matcher) (string, bool)
+	stringFns        []func(t *Matcher) (string, bool)
 	booleanTrueRatio *float64
-	boolTrueFn       []func(t *Matcher) (float64, bool)
+	boolTrueFns      []func(t *Matcher) (float64, bool)
 	pointerNilRatio  *float64
-	pointerNilFn     []func(t *Matcher) (float64, bool)
+	pointerNilFns    []func(t *Matcher) (float64, bool)
+	runesFns         []func(t *Matcher) ([]rune, bool)
 
 	stringLenSet nset[stringLenInt]
 	mapLenSet    nset[mapLenInt]
@@ -76,28 +77,28 @@ type generator struct {
 }
 
 type nset[T numeric] struct {
-	minmax *minmax[T]
-	fn     []func(t *Matcher) (T, T, bool)
+	interval *interval[T]
+	fns      []func(t *Matcher) (T, T, bool)
 }
 
-type minmax[T numeric] struct {
+type interval[T numeric] struct {
 	min T
 	max T
 }
 
-// Option defines an option for customising the generator
+// Option defines an option for customising the generator behaviour
 type Option func(*generator) (*generator, error)
 
-// New creates a new generator with zero or more Options
-func New(options ...Option) (*generator, error) {
+// New creates a new generator
+func New() *generator {
 	g := &generator{
 		maxDepth: 3,
 	}
 
-	return g.WithOptions(options...)
+	return g
 }
 
-// WithOptions adds options to a generator. This may be useful if you wish to use generator methods in a custom function.
+// WithOptions adds options to a generator, returning the customised generator
 func (g *generator) WithOptions(options ...Option) (*generator, error) {
 	var err error
 	for _, o := range options {
@@ -121,7 +122,7 @@ func (g *generator) chanceTrue(ratio float64) bool {
 }
 
 func (g *generator) genBool(t *Matcher) bool {
-	for _, fn := range g.boolTrueFn {
+	for _, fn := range g.boolTrueFns {
 		if out, ok := fn(t); ok {
 			return g.chanceTrue(out)
 		}
@@ -134,7 +135,7 @@ func (g *generator) genBool(t *Matcher) bool {
 }
 
 func (g *generator) genUseNilPointer(t *Matcher) bool {
-	for _, fn := range g.pointerNilFn {
+	for _, fn := range g.pointerNilFns {
 		if out, ok := fn(t); ok {
 			return g.chanceTrue(out)
 		}
@@ -147,7 +148,7 @@ func (g *generator) genUseNilPointer(t *Matcher) bool {
 }
 
 func (g *generator) genString(t *Matcher) string {
-	for _, fn := range g.stringFn {
+	for _, fn := range g.stringFns {
 		if out, ok := fn(t); ok {
 			return out
 		}
@@ -159,6 +160,11 @@ func (g *generator) genString(t *Matcher) string {
 	source := defRunes
 	if len(g.runes) != 0 {
 		source = g.runes
+	}
+	for _, fn := range g.runesFns {
+		if out, ok := fn(t); ok {
+			source = out
+		}
 	}
 	return g.fillString(stringLen, source)
 }
@@ -172,11 +178,11 @@ func (g *generator) fillString(size int, source []rune) string {
 }
 
 func genNumeric[T numeric](set nset[T], t *Matcher, g *generator) T {
-	mm := defaultMinMax[T]()
-	if set.minmax != nil {
-		mm = *set.minmax
+	mm := defaultInterval[T]()
+	if set.interval != nil {
+		mm = *set.interval
 	}
-	for _, fn := range set.fn {
+	for _, fn := range set.fns {
 		if min, max, ok := fn(t); ok {
 			mm.min = min
 			mm.max = max
@@ -257,101 +263,6 @@ func (g *generator) genUint64(t *Matcher) uint64 {
 	return genNumeric(g.uint64Set, t, g)
 }
 
-//func (g *generator) genUint(t *Matcher) uint {
-//	set := g.uintSet
-//	var min, max uint = 0, uint(defMaxInt)
-//	var found bool
-//	for _, fn := range set.fn {
-//		if fmin, fmax, ok := fn(t); ok {
-//			if fmin == fmax {
-//				return fmin
-//			}
-//			min, max, found = min, fmax, true
-//		}
-//	}
-//	if !found && set.minmax != nil {
-//		min = set.minmax.min
-//		max = set.minmax.max
-//	}
-//	return uint(g.InclusiveUint64n(uint64(min), uint64(max)))
-//}
-//
-//func (g *generator) genUint8(t *Matcher) uint8 {
-//	set := g.uint8Set
-//	var min, max uint8 = 0, uint8(defMaxInt)
-//	var found bool
-//	for _, fn := range set.fn {
-//		if fmin, fmax, ok := fn(t); ok {
-//			if fmin == fmax {
-//				return fmin
-//			}
-//			min, max, found = fmin, fmax, true
-//		}
-//	}
-//	if !found && set.minmax != nil {
-//		max = set.minmax.max
-//		max = set.minmax.min
-//	}
-//	return uint8(g.InclusiveUint32n(uint32(min), uint32(max)))
-//}
-//
-//func (g *generator) genUint16(t *Matcher) uint16 {
-//	set := g.uint16Set
-//	var min, max uint16 = 0, uint16(defMaxInt)
-//	var found bool
-//	for _, fn := range set.fn {
-//		if fmin, fmax, ok := fn(t); ok {
-//			if fmin == fmax {
-//				return fmin
-//			}
-//			min, max, found = fmin, fmax, true
-//		}
-//	}
-//	if !found && set.minmax != nil {
-//		min = set.minmax.min
-//		max = set.minmax.max
-//	}
-//	return uint16(g.InclusiveUint32n(uint32(min), uint32(max)))
-//}
-//
-//func (g *generator) genUint32(t *Matcher) uint32 {
-//	set := g.uint32Set
-//	var min, max uint32 = 0, uint32(defMaxInt)
-//	var found bool
-//	for _, fn := range set.fn {
-//		if fmin, fmax, ok := fn(t); ok {
-//			if fmin == fmax {
-//				return fmin
-//			}
-//			min, max, found = fmin, fmax, true
-//		}
-//	}
-//	if !found && set.minmax != nil {
-//		min = set.minmax.min
-//		max = set.minmax.max
-//	}
-//	return g.InclusiveUint32n(min, max)
-//}
-//
-//func (g *generator) genUint64(t *Matcher) uint64 {
-//	set := g.uint64Set
-//	var min, max uint64 = 0, uint64(defMaxInt)
-//	var found bool
-//	for _, fn := range set.fn {
-//		if fmin, fmax, ok := fn(t); ok {
-//			if fmin == fmax {
-//				return fmin
-//			}
-//			min, max, found = fmin, fmax, true
-//		}
-//	}
-//	if !found && set.minmax != nil {
-//		min = set.minmax.min
-//		max = set.minmax.max
-//	}
-//	return g.InclusiveUint64n(min, max)
-//}
-
 // FillRandomly fills a data structure pseudo-randomly. The argument must be a pointer to the structure.
 func (g *generator) FillRandomly(a any) error {
 
@@ -367,7 +278,7 @@ func (g *generator) FillRandomly(a any) error {
 // FillRandomlyByValue fills a data structure pseudo-randomly. The argument must be the reflect.Value of the structure.
 func (g *generator) FillRandomlyByValue(value reflect.Value) error {
 	if !value.CanSet() {
-		return fmt.Errorf("the argument to FillRandomlyByValue must be able to be nset")
+		return fmt.Errorf("the argument to FillRandomlyByValue must be able to be set")
 	}
 
 	g.fill(value, nil)
