@@ -319,7 +319,7 @@ func WithMapLengthFn(fn func(t *Matcher) (int, int, bool)) Option {
 	}
 }
 
-func StringFn(fn func(t *Matcher) (string, bool)) Option {
+func WithStringFn(fn func(t *Matcher) (string, bool)) Option {
 	return func(g *generator) (*generator, error) {
 		g.stringFns = append(g.stringFns, fn)
 		return g, nil

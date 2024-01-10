@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 type inttest int64
@@ -43,23 +44,29 @@ type Holder struct {
 }
 
 type Unmatched struct {
-	Int     int
-	Int8    int8
-	Int16   int16
-	Int32   int32
-	Int64   int64
-	Uint    uint
-	Uint8   uint8
-	Uint16  uint16
-	Uint32  uint32
-	Uint64  uint64
-	Float32 float32
-	Float64 float64
-	Bool    bool
-	Map     map[string]string
-	Slice   []string
-	Pointer *string
-	String  string
+	Int      int
+	Int8     int8
+	Int16    int16
+	Int32    int32
+	Int64    int64
+	Uint     uint
+	Uint8    uint8
+	Uint16   uint16
+	Uint32   uint32
+	Uint64   uint64
+	Float32  float32
+	Float64  float64
+	Bool     bool
+	Map      map[string]string
+	Slice    []string
+	Pointer  *string
+	String   string
+	Array    [8]string
+	Complex1 complex64
+	Complex2 complex128
+	Any      any
+	private  int
+	unsafe   unsafe.Pointer
 }
 
 type Matched struct {
@@ -94,7 +101,7 @@ func TestRanges(t *testing.T) {
 	)
 
 	e := new(Unmatched)
-	subject.FillRandomly(e)
+	subject.Fill(e)
 
 	assert.Equal(t, int(intval), e.Int)
 	assert.Equal(t, int8(int8val), e.Int8)
@@ -180,7 +187,7 @@ func TestFns(t *testing.T) {
 	)
 
 	u := new(Unmatched)
-	subject.FillRandomly(u)
+	subject.Fill(u)
 
 	assert.Equal(t, int(intval), u.Int)
 	assert.Equal(t, int8(int8val), u.Int8)
@@ -218,7 +225,7 @@ func TestMatch(t *testing.T) {
 			}
 			return int(intval), int(intval), true
 		}),
-		generator.StringFn(func(m *generator.Matcher) (string, bool) {
+		generator.WithStringFn(func(m *generator.Matcher) (string, bool) {
 			if m.MatchesAFieldOf(Matched{}, "String1") {
 				return "TESTING", true
 			}
@@ -227,7 +234,7 @@ func TestMatch(t *testing.T) {
 	)
 
 	h := new(Holder)
-	_ = subject.FillRandomly(h)
+	_ = subject.Fill(h)
 	u := h.Unmatched
 	m := h.Matched
 
@@ -243,7 +250,12 @@ func TestRand(t *testing.T) {
 	m := new(mockRand)
 	subject, _ = subject.WithOptions(generator.WithRandomiser(m))
 	_ = subject.Uint32()
-	assert.True(t, m.used)
+	_ = subject.Uint32n(99)
+	_ = subject.Uint64()
+	_ = subject.Uint64n(99)
+	_ = subject.Float32()
+	_ = subject.Float64()
+	assert.Equal(t, 6, m.used)
 }
 
 func TestErrors(t *testing.T) {

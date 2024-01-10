@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"strings"
 )
 
 const (
@@ -20,24 +19,9 @@ const (
 	defMaxFloat         = float64(math.MaxInt8)
 )
 
-var (
-	defRunes = []rune("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	boolType    = reflect.TypeOf(true)
-	intType     = reflect.TypeOf(0)
-	int8Type    = reflect.TypeOf(int8(0))
-	int16Type   = reflect.TypeOf(int16(0))
-	int32Type   = reflect.TypeOf(int32(0))
-	int64Type   = reflect.TypeOf(int64(0))
-	uintType    = reflect.TypeOf(uint(0))
-	uint8Type   = reflect.TypeOf(uint8(0))
-	uint16Type  = reflect.TypeOf(uint16(0))
-	uint32Type  = reflect.TypeOf(uint32(0))
-	uint64Type  = reflect.TypeOf(uint64(0))
-	float32Type = reflect.TypeOf(float32(0))
-	float64Type = reflect.TypeOf(float64(0))
-	stringType  = reflect.TypeOf("")
-)
+func getDefRunes() []rune {
+	return []rune("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+}
 
 type stringLenInt int
 type mapLenInt int
@@ -50,7 +34,6 @@ type numeric interface {
 type generator struct {
 	rand Randomiser
 
-	maxDepth         int
 	runes            []rune
 	stringFns        []func(t *Matcher) (string, bool)
 	booleanTrueRatio *float64
@@ -91,11 +74,7 @@ type Option func(*generator) (*generator, error)
 
 // New creates a new generator
 func New() *generator {
-	g := &generator{
-		maxDepth: 3,
-	}
-
-	return g
+	return new(generator)
 }
 
 // WithOptions adds options to a generator, returning the customised generator
@@ -111,177 +90,15 @@ func (g *generator) WithOptions(options ...Option) (*generator, error) {
 	return g, nil
 }
 
-func (g *generator) chanceTrue(ratio float64) bool {
-	if ratio <= 0 {
-		return false
-	}
-	if ratio >= 1 {
-		return true
-	}
-	return g.Float64() >= ratio
-}
-
-func (g *generator) genBool(t *Matcher) bool {
-	for _, fn := range g.boolTrueFns {
-		if out, ok := fn(t); ok {
-			return g.chanceTrue(out)
-		}
-	}
-	ratio := defBooleanTrueRatio
-	if g.booleanTrueRatio != nil {
-		ratio = *g.booleanTrueRatio
-	}
-	return g.chanceTrue(ratio)
-}
-
-func (g *generator) genUseNilPointer(t *Matcher) bool {
-	for _, fn := range g.pointerNilFns {
-		if out, ok := fn(t); ok {
-			return g.chanceTrue(out)
-		}
-	}
-	ratio := defNilPointerRatio
-	if g.pointerNilRatio != nil {
-		ratio = *g.pointerNilRatio
-	}
-	return g.chanceTrue(ratio)
-}
-
-func (g *generator) genString(t *Matcher) string {
-	for _, fn := range g.stringFns {
-		if out, ok := fn(t); ok {
-			return out
-		}
-	}
-	stringLen := g.genStringLen(t)
-	if stringLen == 0 {
-		return ""
-	}
-	source := defRunes
-	if len(g.runes) != 0 {
-		source = g.runes
-	}
-	for _, fn := range g.runesFns {
-		if out, ok := fn(t); ok {
-			source = out
-		}
-	}
-	return g.fillString(stringLen, source)
-}
-
-func (g *generator) fillString(size int, source []rune) string {
-	runes := make([]rune, size)
-	for j := 0; j < size; j++ {
-		runes[j] = source[g.Intn(len(source))]
-	}
-	return string(runes)
-}
-
-func genNumeric[T numeric](set nset[T], t *Matcher, g *generator) T {
-	mm := defaultInterval[T]()
-	if set.interval != nil {
-		mm = *set.interval
-	}
-	for _, fn := range set.fns {
-		if min, max, ok := fn(t); ok {
-			mm.min = min
-			mm.max = max
-		}
-	}
-	if mm.min == mm.max {
-		return mm.min
-	}
-	divisor := T(2)
-	switch any(mm.min).(type) {
-	case int, int64:
-		return T(g.InclusiveInt64n(int64(mm.min), int64(mm.max)))
-	case float32:
-		return ((T(g.Float32()) * ((mm.max / divisor) - (mm.min / divisor))) + (mm.min / divisor)) * divisor
-	case float64:
-		return ((T(g.Float64()) * ((mm.max / divisor) - (mm.min / divisor))) + (mm.min / divisor)) * divisor
-	}
-	return T(g.InclusiveInt32n(int32(mm.min), int32(mm.max)))
-}
-
-func (g *generator) genFloat32(t *Matcher) float32 {
-	return genNumeric(g.float32Set, t, g)
-}
-
-func (g *generator) genFloat64(t *Matcher) float64 {
-	return genNumeric(g.float64Set, t, g)
-}
-
-func (g *generator) genStringLen(t *Matcher) int {
-	return int(genNumeric(g.stringLenSet, t, g))
-}
-
-func (g *generator) genSliceLen(t *Matcher) int {
-	return int(genNumeric(g.sliceLenSet, t, g))
-}
-
-func (g *generator) genMapLen(t *Matcher) int {
-	return int(genNumeric(g.mapLenSet, t, g))
-}
-
-func (g *generator) genInt(t *Matcher) int {
-	return genNumeric(g.intSet, t, g)
-}
-
-func (g *generator) genInt8(t *Matcher) int8 {
-	return genNumeric(g.int8Set, t, g)
-}
-
-func (g *generator) genInt16(t *Matcher) int16 {
-	return genNumeric(g.int16Set, t, g)
-}
-
-func (g *generator) genInt32(t *Matcher) int32 {
-	return genNumeric(g.int32Set, t, g)
-}
-
-func (g *generator) genInt64(t *Matcher) int64 {
-	return genNumeric(g.int64Set, t, g)
-}
-
-func (g *generator) genUint(t *Matcher) uint {
-	return genNumeric(g.uintSet, t, g)
-}
-
-func (g *generator) genUint8(t *Matcher) uint8 {
-	return genNumeric(g.uint8Set, t, g)
-}
-
-func (g *generator) genUint16(t *Matcher) uint16 {
-	return genNumeric(g.uint16Set, t, g)
-}
-
-func (g *generator) genUint32(t *Matcher) uint32 {
-	return genNumeric(g.uint32Set, t, g)
-}
-
-func (g *generator) genUint64(t *Matcher) uint64 {
-	return genNumeric(g.uint64Set, t, g)
-}
-
-// FillRandomly fills a data structure pseudo-randomly. The argument must be a pointer to the structure.
-func (g *generator) FillRandomly(a any) error {
+// Fill fills a data structure, by default pseudo-randomly. Its argument must be a pointer to the structure.
+func (g *generator) Fill(a any) error {
 
 	value := reflect.ValueOf(a)
 	if value.Kind() != reflect.Pointer {
-		return fmt.Errorf("the argument to FillRandomly to must be a pointer")
+		return fmt.Errorf("the argument to Fill to must be a pointer")
 	}
 
 	g.fill(value.Elem(), nil)
-	return nil
-}
-
-// FillRandomlyByValue fills a data structure pseudo-randomly. The argument must be the reflect.Value of the structure.
-func (g *generator) FillRandomlyByValue(value reflect.Value) error {
-	if !value.CanSet() {
-		return fmt.Errorf("the argument to FillRandomlyByValue must be able to be set")
-	}
-
-	g.fill(value, nil)
 	return nil
 }
 
@@ -289,296 +106,114 @@ func (g *generator) fill(value reflect.Value, matcher *Matcher) {
 	if !value.CanSet() {
 		return
 	}
-	currentType := value.Type()
+	rtype := value.Type()
 
 	switch value.Kind() {
 	case reflect.Pointer:
-		if g.genUseNilPointer(matcher.forType(currentType)) {
+		if g.genUseNilPointer(matcher.forSimpleType(rtype)) {
 			return
 		}
-		pointerType := value.Type().Elem()
-		switch pointerType.Kind() {
-		case reflect.Chan,
-			reflect.Func,
-			reflect.Uintptr,
-			reflect.UnsafePointer,
-			reflect.Invalid:
-			return
-		}
-		value.Set(reflect.New(pointerType))
-		g.fill(value.Elem(), matcher.forType(currentType))
+		value.Set(reflect.New(value.Type().Elem()))
+		g.fill(value.Elem(), matcher.forSimpleType(rtype))
 
 	case reflect.Bool:
-		randBool := g.genBool(matcher.forType(currentType))
+		randBool := g.genBool(matcher.forSimpleType(rtype))
 		value.SetBool(randBool)
 
 	case reflect.Int:
-		randInt := int64(g.genInt(matcher.forType(currentType)))
+		randInt := int64(g.genInt(matcher.forSimpleType(rtype)))
 		value.SetInt(randInt)
 
 	case reflect.Int8:
-		randInt := int64(g.genInt8(matcher.forType(currentType)))
+		randInt := int64(g.genInt8(matcher.forSimpleType(rtype)))
 		value.SetInt(randInt)
 
 	case reflect.Int16:
-		randInt := int64(g.genInt16(matcher.forType(currentType)))
+		randInt := int64(g.genInt16(matcher.forSimpleType(rtype)))
 		value.SetInt(randInt)
 
 	case reflect.Int32:
-		randInt := int64(g.genInt32(matcher.forType(currentType)))
+		randInt := int64(g.genInt32(matcher.forSimpleType(rtype)))
 		value.SetInt(randInt)
 
 	case reflect.Int64:
-		randInt := g.genInt64(matcher.forType(currentType))
+		randInt := g.genInt64(matcher.forSimpleType(rtype))
 		value.SetInt(randInt)
 
 	case reflect.Uint:
-		randUint := uint64(g.genUint(matcher.forType(currentType)))
+		randUint := uint64(g.genUint(matcher.forSimpleType(rtype)))
 		value.SetUint(randUint)
 
 	case reflect.Uint8:
-		randUint := uint64(g.genUint8(matcher.forType(currentType)))
+		randUint := uint64(g.genUint8(matcher.forSimpleType(rtype)))
 		value.SetUint(randUint)
 
 	case reflect.Uint16:
-		randUint := uint64(g.genUint16(matcher.forType(currentType)))
+		randUint := uint64(g.genUint16(matcher.forSimpleType(rtype)))
 		value.SetUint(randUint)
 
 	case reflect.Uint32:
-		randUint := uint64(g.genUint32(matcher.forType(currentType)))
+		randUint := uint64(g.genUint32(matcher.forSimpleType(rtype)))
 		value.SetUint(randUint)
 
 	case reflect.Uint64:
-		randUint := g.genUint64(matcher.forType(currentType))
+		randUint := g.genUint64(matcher.forSimpleType(rtype))
 		value.SetUint(randUint)
 
 	case reflect.Float32:
-		randFloat := float64(g.genFloat32(matcher.forType(currentType)))
+		randFloat := float64(g.genFloat32(matcher.forSimpleType(rtype)))
 		value.SetFloat(randFloat)
 
 	case reflect.Float64:
-		randFloat := g.genFloat64(matcher.forType(currentType))
+		randFloat := g.genFloat64(matcher.forSimpleType(rtype))
 		value.SetFloat(randFloat)
 
 	case reflect.Complex64:
-		r := float32(g.genFloat32(matcher.forReal(currentType)))
-		i := float32(g.genFloat32(matcher.forImaginary(currentType)))
+		r := g.genFloat32(matcher.forRealPart(rtype))
+		i := g.genFloat32(matcher.forImaginaryPart(rtype))
 		value.SetComplex(complex128(complex(r, i)))
 
 	case reflect.Complex128:
-		r := float64(g.genFloat32(matcher.forReal(currentType)))
-		i := float64(g.genFloat32(matcher.forImaginary(currentType)))
+		r := g.genFloat64(matcher.forRealPart(rtype))
+		i := g.genFloat64(matcher.forImaginaryPart(rtype))
 		value.SetComplex(complex(r, i))
 
 	case reflect.String:
-		randStringVal := g.genString(matcher.forType(currentType))
+		randStringVal := g.genString(matcher.forSimpleType(rtype))
 		value.SetString(randStringVal)
 
-	case reflect.Interface:
-		if currentType.NumMethod() == 0 {
-			if newElement, ok := g.genAnyValue(matcher.forType(currentType)); ok {
-				value.Set(newElement)
-			}
-		}
-
 	case reflect.Slice:
-		elementType := currentType.Elem()
-		size := g.genSliceLen(matcher.forSliceLen(currentType))
+		elementType := rtype.Elem()
+		size := g.genSliceLen(matcher.forSliceLen(rtype))
 		sliceVal := reflect.MakeSlice(reflect.SliceOf(elementType), 0, size)
 		for i := 0; i < size; i++ {
 			newElement := reflect.Indirect(reflect.New(elementType))
-			g.fill(newElement, matcher.forSlice(currentType, i))
+			g.fill(newElement, matcher.forSliceElement(rtype, i, size))
 			sliceVal = reflect.Append(sliceVal, newElement)
 		}
 		value.Set(sliceVal)
 
 	case reflect.Array:
 		for i := 0; i < value.Len(); i++ {
-			g.fill(value.Index(i), matcher.forSlice(currentType, i))
+			g.fill(value.Index(i), matcher.forArrayElement(rtype, i, value.Len()))
 		}
 
 	case reflect.Map:
-		mapVal := reflect.MakeMap(currentType)
-		size := g.genMapLen(matcher.forMapLen(currentType))
+		mapVal := reflect.MakeMap(rtype)
+		size := g.genMapLen(matcher.forMapLen(rtype))
+		// note that actual map length will be lower than size if any duplicate keys are generated
 		for i := 0; i < size; i++ {
-			newElement := reflect.Indirect(reflect.New(currentType.Elem()))
-			g.fill(newElement, matcher.forMapValue(currentType))
-			newKey := reflect.Indirect(reflect.New(currentType.Key()))
-			g.fill(newKey, matcher.forMapKey(currentType))
+			newKey := reflect.Indirect(reflect.New(rtype.Key()))
+			g.fill(newKey, matcher.forMapKey(rtype))
+			newElement := reflect.Indirect(reflect.New(rtype.Elem()))
+			g.fill(newElement, matcher.forMapElement(rtype, newKey.Interface()))
 			mapVal.SetMapIndex(newKey, newElement)
 		}
 		value.Set(mapVal)
 
 	case reflect.Struct:
 		for i := 0; i < value.NumField(); i++ {
-			g.fill(value.Field(i), matcher.forField(currentType, currentType.Field(i)))
+			g.fill(value.Field(i), matcher.forField(rtype, rtype.Field(i)))
 		}
 	}
-}
-
-func (g *generator) genAnyValue(t *Matcher) (val reflect.Value, ok bool) {
-	kind, kindType := g.pickAnyKind(false, 0)
-	anyVal := reflect.Indirect(reflect.New(kindType))
-	switch kind {
-	case reflect.Bool:
-		randVal := g.genBool(t)
-		anyVal.SetBool(randVal)
-	case reflect.String:
-		randVal := g.genString(t)
-		anyVal.SetString(randVal)
-	case reflect.Int:
-		randVal := g.genInt(t)
-		anyVal.SetInt(int64(randVal))
-	case reflect.Int8:
-		randVal := g.genInt8(t)
-		anyVal.SetInt(int64(randVal))
-	case reflect.Int16:
-		randVal := g.genInt16(t)
-		anyVal.SetInt(int64(randVal))
-	case reflect.Int32:
-		randVal := g.genInt32(t)
-		anyVal.SetInt(int64(randVal))
-	case reflect.Int64:
-		randVal := g.genInt64(t)
-		anyVal.SetInt(randVal)
-	case reflect.Uint:
-		randVal := g.genUint(t)
-		anyVal.SetUint(uint64(randVal))
-	case reflect.Uint8:
-		randVal := g.genUint8(t)
-		anyVal.SetUint(uint64(randVal))
-	case reflect.Uint16:
-		randVal := g.genUint16(t)
-		anyVal.SetUint(uint64(randVal))
-	case reflect.Uint32:
-		randVal := g.genUint32(t)
-		anyVal.SetUint(uint64(randVal))
-	case reflect.Uint64:
-		randVal := g.genUint64(t)
-		anyVal.SetUint(randVal)
-	case reflect.Float32:
-		randVal := g.genFloat32(t)
-		anyVal.SetFloat(float64(randVal))
-	case reflect.Float64:
-		randVal := g.genFloat64(t)
-		anyVal.SetFloat(randVal)
-	case reflect.Slice:
-		size := g.genSliceLen(t.forSliceLen(t.currentType))
-		subType := kindType.Elem()
-		sliceVal := reflect.MakeSlice(reflect.SliceOf(subType), 0, size)
-		for i := 0; i < size; i++ {
-			subVal := reflect.Indirect(reflect.New(subType))
-			g.fill(subVal, t.forSlice(t.currentType, i))
-			sliceVal = reflect.Append(sliceVal, subVal)
-		}
-		anyVal.Set(sliceVal)
-	case reflect.Map:
-		mapVal := reflect.MakeMap(kindType)
-		size := g.genMapLen(t.forMapLen(t.currentType))
-		for i := 0; i < size; i++ {
-			newElement := reflect.Indirect(reflect.New(kindType.Elem()))
-			g.fill(newElement, t.forMapValue(t.currentType))
-			newKey := reflect.Indirect(reflect.New(kindType.Key()))
-			g.fill(newKey, t.forMapKey(t.currentType))
-			mapVal.SetMapIndex(newKey, newElement)
-		}
-		anyVal.Set(mapVal)
-	case reflect.Struct:
-		for i := 0; i < anyVal.NumField(); i++ {
-			g.fill(anyVal.Field(i), nil)
-		}
-
-	default:
-		return
-	}
-
-	return anyVal, true
-}
-
-func (g *generator) pickAnyKind(key bool, depth int) (reflect.Kind, reflect.Type) {
-	max := 34
-	if depth >= g.maxDepth {
-		max = 22
-	}
-	if key {
-		max = 14
-	}
-	i := g.Intn(max)
-
-	switch i {
-	case 0, 1, 2, 3:
-		return reflect.String, stringType
-	case 4:
-		return reflect.Int, intType
-	case 5:
-		return reflect.Int8, int8Type
-	case 6:
-		return reflect.Int16, int16Type
-	case 7:
-		return reflect.Int32, int32Type
-	case 8:
-		return reflect.Int64, int64Type
-	case 9:
-		return reflect.Uint, uintType
-	case 10:
-		return reflect.Uint8, uint8Type
-	case 11:
-		return reflect.Uint16, uint16Type
-	case 12:
-		return reflect.Uint32, uint32Type
-	case 13:
-		return reflect.Uint64, uint64Type
-
-		// non-keys
-	case 14, 15:
-		return reflect.Float32, float32Type
-	case 16, 17:
-		return reflect.Float64, float64Type
-	case 18, 19, 20, 21:
-		return reflect.Bool, boolType
-
-		// depth-limited
-	case 22, 23, 24, 25:
-		//slice
-		_, subType := g.pickAnyKind(false, depth+1)
-		return reflect.Slice, reflect.SliceOf(subType)
-	case 26, 27, 28, 29:
-		//map
-		_, keyType := g.pickAnyKind(true, depth+1)
-		_, valueType := g.pickAnyKind(false, depth+1)
-		return reflect.Map, reflect.MapOf(keyType, valueType)
-	case 30, 31, 32, 33:
-		//struct
-		return reflect.Struct, reflect.StructOf(g.makeStructFields(depth))
-	}
-
-	return reflect.Invalid, reflect.TypeOf(nil)
-}
-
-func (g *generator) makeStructFields(depth int) []reflect.StructField {
-	fields := make([]reflect.StructField, g.Intn(5)+1)
-	runes := []rune("abcdefghijklmnopqrstuvwxyz")
-	i := 0
-	for {
-		fieldName := strings.Title(g.fillString(g.Intn(5)+2, runes))
-		dup := false
-		for j := 0; j < i; j++ {
-			if fieldName == fields[j].Name {
-				dup = true
-			}
-		}
-		if dup {
-			continue
-		}
-		_, fieldType := g.pickAnyKind(false, depth+1)
-		fields[i] = reflect.StructField{
-			Name: fieldName,
-			Type: fieldType,
-		}
-		i++
-		if i == len(fields) {
-			break
-		}
-	}
-	return fields
 }

@@ -10,12 +10,6 @@ var _ Randomiser = (*generator)(nil)
 
 // Randomiser defines random methods.
 type Randomiser interface {
-	Int() int
-	Intn(int) int
-	Int31() int32
-	Int31n(int32) int32
-	Int63() int64
-	Int63n(int64) int64
 	Uint32() uint32
 	Uint32n(uint32) uint32
 	Uint64() uint64
@@ -69,57 +63,6 @@ func (g *generator) InclusiveUint64n(min, max uint64) uint64 {
 		return g.Uint64()
 	}
 	return g.Uint64n(max-min) + min
-}
-
-// Int returns a uniformly distributed non-negative random int.
-func (g *generator) Int() int {
-	if g.rand != nil {
-		return g.rand.Int()
-	}
-	return rand.Int()
-}
-
-// Intn returns, as an int, a uniformly distributed non-negative random number
-// in the half-open interval [0, n). It panics if n <= 0.
-func (g *generator) Intn(i int) int {
-	if g.rand != nil {
-		return g.rand.Intn(i)
-	}
-	return rand.Intn(i)
-}
-
-// Int31 returns a uniformly distributed non-negative random 31-bit integer as an int32.
-func (g *generator) Int31() int32 {
-	if g.rand != nil {
-		return g.rand.Int31()
-	}
-	return rand.Int31()
-}
-
-// Int31n returns, as an int32, a uniformly distributed non-negative random number
-// in the half-open interval [0, n). It panics if n <= 0.
-func (g *generator) Int31n(i int32) int32 {
-	if g.rand != nil {
-		return g.rand.Int31n(i)
-	}
-	return rand.Int31n(i)
-}
-
-// Int63 returns a uniformly distributed non-negative random 63-bit integer as an int64.
-func (g *generator) Int63() int64 {
-	if g.rand != nil {
-		return g.rand.Int63()
-	}
-	return rand.Int63()
-}
-
-// Int63n returns, as an int64, a uniformly distributed non-negative random number
-// in the half-open interval [0, n). It panics if n <= 0.
-func (g *generator) Int63n(i int64) int64 {
-	if g.rand != nil {
-		return g.rand.Int63n(i)
-	}
-	return rand.Int63n(i)
 }
 
 // Uint32 returns a uniformly distributed random 32-bit value as an uint32.

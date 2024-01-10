@@ -94,7 +94,7 @@ func main2() {
 
 		generator.WithIntFn(
 			func(m *generator.Matcher) (int, int, bool) {
-				if m.IsAMapValueOf(map[string]int{}) {
+				if m.IsAMapElement() {
 
 					return -6, 6, true
 				}
@@ -102,7 +102,7 @@ func main2() {
 			}),
 	)
 
-	if err := g.FillRandomly(&tester); err != nil {
+	if err := g.Fill(&tester); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

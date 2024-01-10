@@ -5,17 +5,21 @@ import (
 )
 
 type Matcher struct {
-	parent      *Matcher
-	currentType reflect.Type
-	field       *reflect.StructField
-	sliceIndex  int
-	mapKey      bool
-	mapValue    bool
-	real        bool
-	imaginary   bool
-	mapLen      bool
-	sliceLen    bool
-	name        string
+	parent          *Matcher
+	rtype           reflect.Type
+	field           *reflect.StructField
+	index           int
+	isMapKey        bool
+	isMapElement    bool
+	mapKeyValue     any
+	isRealPart      bool
+	isImaginaryPart bool
+	isSliceElement  bool
+	isArrayElement  bool
+	isMapLen        bool
+	isSliceLen      bool
+	name            string
+	length          int
 }
 
 func indirect(t reflect.Type) reflect.Type {
@@ -30,14 +34,14 @@ func matches(t1, t2 reflect.Type) bool {
 }
 
 func (t *Matcher) MatchesA(a any) bool {
-	return matches(t.currentType, reflect.TypeOf(a))
+	return matches(t.rtype, reflect.TypeOf(a))
 }
 
 func (t *Matcher) MatchesAFieldOf(a any, names ...string) bool {
 	if t.parent == nil || t.parent.field == nil {
 		return false
 	}
-	if !matches(t.parent.currentType, reflect.TypeOf(a)) {
+	if !matches(t.parent.rtype, reflect.TypeOf(a)) {
 		return false
 	}
 	for _, name := range names {
@@ -48,40 +52,44 @@ func (t *Matcher) MatchesAFieldOf(a any, names ...string) bool {
 	return false
 }
 
-func (t *Matcher) IsAMapKeyOf(a any) bool {
-	if t.parent == nil || t.parent.Kind() != reflect.Map {
-		return false
-	}
-	if !matches(t.parent.currentType, reflect.TypeOf(a)) {
-		return false
-	}
-	return t.parent.mapKey
+func (t *Matcher) IsAMapKey() bool {
+	return t.parent != nil && t.parent.isMapKey
 }
 
-func (t *Matcher) IsAMapValueOf(a any) bool {
-	if t.parent == nil || t.parent.Kind() != reflect.Map {
-		return false
-	}
-	if !matches(t.parent.currentType, reflect.TypeOf(a)) {
-		return false
-	}
-	return t.parent.mapValue
+func (t *Matcher) IsAMapElement() bool {
+	return t.parent != nil && t.parent.isMapElement
 }
 
-func (t *Matcher) String() string {
-	return t.currentType.String()
+func (t *Matcher) IsASliceElement() bool {
+	return t.parent != nil && t.parent.isSliceElement
 }
 
-func (t *Matcher) Name() string {
-	return t.currentType.Name()
+func (t *Matcher) IsAnArrayElement() bool {
+	return t.parent != nil && t.parent.isArrayElement
 }
 
-func (t *Matcher) PkgPath() string {
-	return t.currentType.PkgPath()
+func (t *Matcher) IsARealPart() bool {
+	return t.isRealPart
 }
 
-func (t *Matcher) Kind() reflect.Kind {
-	return indirect(t.currentType).Kind()
+func (t *Matcher) IsAnImaginaryPart() bool {
+	return t.isImaginaryPart
+}
+
+func (t *Matcher) Index() int {
+	return t.index
+}
+
+func (t *Matcher) Length() int {
+	return t.length
+}
+
+func (t *Matcher) MapKeyValue() any {
+	return t.mapKeyValue
+}
+
+func (t *Matcher) Type() reflect.Type {
+	return t.rtype
 }
 
 func (t *Matcher) Parent() *Matcher {
@@ -92,74 +100,87 @@ func (t *Matcher) HasParent() bool {
 	return t.parent != nil
 }
 
-func (t *Matcher) forType(current reflect.Type) *Matcher {
+func (t *Matcher) forSimpleType(current reflect.Type) *Matcher {
 	return &Matcher{
-		currentType: current,
-		name:        current.String(),
-		parent:      t,
+		rtype:  current,
+		name:   current.String(),
+		parent: t,
 	}
 }
 
 func (t *Matcher) forField(current reflect.Type, field reflect.StructField) *Matcher {
 	return &Matcher{
-		currentType: current,
-		field:       &field,
-		parent:      t,
+		rtype:  current,
+		field:  &field,
+		parent: t,
 	}
 }
 
 func (t *Matcher) forMapKey(current reflect.Type) *Matcher {
 	return &Matcher{
-		currentType: current,
-		mapKey:      true,
-		parent:      t,
+		rtype:    current,
+		isMapKey: true,
+		parent:   t,
 	}
 }
 
-func (t *Matcher) forMapValue(current reflect.Type) *Matcher {
+func (t *Matcher) forMapElement(current reflect.Type, key any) *Matcher {
 	return &Matcher{
-		currentType: current,
-		mapValue:    true,
-		parent:      t,
+		rtype:        current,
+		isMapElement: true,
+		mapKeyValue:  key,
+		parent:       t,
 	}
 }
 
-func (t *Matcher) forSlice(current reflect.Type, sliceIndex int) *Matcher {
+func (t *Matcher) forSliceElement(current reflect.Type, index int, length int) *Matcher {
 	return &Matcher{
-		currentType: current,
-		sliceIndex:  sliceIndex,
-		parent:      t,
+		rtype:          current,
+		isSliceElement: true,
+		index:          index,
+		length:         length,
+		parent:         t,
 	}
 }
 
-func (t *Matcher) forReal(current reflect.Type) *Matcher {
+func (t *Matcher) forArrayElement(current reflect.Type, index int, length int) *Matcher {
 	return &Matcher{
-		currentType: current,
-		real:        true,
-		parent:      t,
+		rtype:          current,
+		isArrayElement: true,
+		index:          index,
+		length:         length,
+		parent:         t,
 	}
 }
 
-func (t *Matcher) forImaginary(current reflect.Type) *Matcher {
+func (t *Matcher) forRealPart(current reflect.Type) *Matcher {
 	return &Matcher{
-		currentType: current,
-		imaginary:   true,
-		parent:      t,
+		rtype:      current,
+		isRealPart: true,
+		parent:     t,
+	}
+}
+
+func (t *Matcher) forImaginaryPart(current reflect.Type) *Matcher {
+	return &Matcher{
+		rtype:           current,
+		isImaginaryPart: true,
+		parent:          t,
 	}
 }
 
 func (t *Matcher) forMapLen(current reflect.Type) *Matcher {
 	return &Matcher{
-		currentType: current,
-		mapLen:      true,
-		parent:      t,
+		rtype:    current,
+		isMapLen: true,
+		parent:   t,
 	}
 }
 
 func (t *Matcher) forSliceLen(current reflect.Type) *Matcher {
 	return &Matcher{
-		currentType: current,
-		sliceLen:    true,
-		parent:      t,
+		rtype:      current,
+		isSliceLen: true,
+		parent:     t,
 	}
 }
